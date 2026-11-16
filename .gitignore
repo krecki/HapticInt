@@ -1,0 +1,61 @@
+# ==============================
+# Android Studio / IntelliJ
+# ==============================
+
+.idea/
+*.iml
+out/
+
+# ==============================
+# Gradle
+# ==============================
+
+.gradle/
+build/
+**/build/
+
+# ==============================
+# Android local configuration
+# ==============================
+
+local.properties
+
+# ==============================
+# Android build and native files
+# ==============================
+
+.externalNativeBuild/
+.cxx/
+captures/
+
+# ==============================
+# Operating system files
+# ==============================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==============================
+# Logs and temporary files
+# ==============================
+
+*.log
+*.tmp
+*.swp
+
+# ==============================
+# Environment variables / secrets
+# ==============================
+
+.env
+.env.*
+!.env.example
+
+# ==============================
+# Signing keys and credentials
+# ==============================
+
+*.jks
+*.keystore
+keystore.properties
