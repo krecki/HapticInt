@@ -32,6 +32,7 @@ fun PendantConnectionPanel(
     onContinuousJogStartActionAvailable:
         (((String, Double, MachineUnits) -> Unit)?) -> Unit,
     onStopJogActionAvailable: ((() -> Unit)?) -> Unit,
+    onJogModeConfigurationAvailable: (((Int, Double, Double) -> Unit)?) -> Unit,
     onCommandBusyChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -131,6 +132,12 @@ fun PendantConnectionPanel(
         }
     }
 
+    val jogModeConfigurationAction = remember(commandController) {
+        { mode: Int, stepMm: Double, feedMmMin: Double ->
+            commandController.configureJogMode(mode, stepMm, feedMmMin)
+        }
+    }
+
     // Publish the jog stop action.
     val stopJogAction = remember(commandController) {
         {
@@ -144,6 +151,7 @@ fun PendantConnectionPanel(
         latestIncrementalJogCallback.value(incrementalJogAction)
         latestContinuousJogCallback.value(continuousJogStartAction)
         latestStopJogCallback.value(stopJogAction)
+        onJogModeConfigurationAvailable(jogModeConfigurationAction)
         latestBusyCallback.value(commandBusy)
     }
 
@@ -205,6 +213,7 @@ fun PendantConnectionPanel(
             latestIncrementalJogCallback.value(null)
             latestContinuousJogCallback.value(null)
             latestStopJogCallback.value(null)
+            onJogModeConfigurationAvailable(null)
             latestBusyCallback.value(false)
 
             commandController.releaseResources()
