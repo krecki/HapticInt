@@ -27,7 +27,7 @@ fun PendantApp() {
     // MPG settings and state
     var pulsesPerRev by remember { mutableIntStateOf(50) }
     var mpgPosition by remember { mutableIntStateOf(0) }
-    var mpgResolution by remember { mutableStateOf("0.001") }
+    var mpgResolution by remember { mutableStateOf("0.01") }
     var mpgAxis by remember { mutableStateOf("X") }
 
     // One shared feed rate, always stored internally in mm/min.
@@ -291,10 +291,6 @@ fun PendantApp() {
                         mpgAxis = it
                     },
                     displayUnits = displayUnits,
-                    feedRate = displayedFeedRate,
-                    onFeedRateChanged = {
-                        updateDisplayedFeedRate(it)
-                    },
                     onJogRequest = { axis, distance, feedRate, units ->
                         lastIncrementalCommand =
                             "MPG $axis detent: $distance at $feedRate ($units)"
