@@ -95,6 +95,13 @@ class PendantCommandController(
     // Blocks new operations if the controller's MPG state is uncertain.
     private var controlStateUncertain = false
 
+    // Runtime keypad settings are volatile on the controller. Cache only for
+    // this connection and resend them after every reconnect.
+    private var runtimeStepSpeedMmMin: Float? = null
+    private var runtimeFastSpeedMmMin: Float? = null
+    private var runtimeStepDistanceMm: Float? = null
+    private var runtimeFastDistanceMm: Float? = null
+
     val isBusy: Boolean
         get() = stage != Stage.IDLE
 
@@ -113,6 +120,13 @@ class PendantCommandController(
         )
 
         onStatusChanged(currentStatus)
+
+        if (connected) {
+            runtimeStepSpeedMmMin = null
+            runtimeFastSpeedMmMin = null
+            runtimeStepDistanceMm = null
+            runtimeFastDistanceMm = null
+        }
 
         if (!connected && stage != Stage.IDLE) {
             cancelTimeout()
@@ -698,9 +712,9 @@ class PendantCommandController(
                 if (jogStopRequested || (continuousJog && !continuousJogActive)) {
                     releaseControl("Jog stopped.")
                 } else if (continuousJog) {
-                    // Continuous jogging now streams segments on command acceptance.
-                    // Reaching this branch normally means the jog was cancelled.
-                    releaseControl("Jog stopped.")
+                    // Only send the next bounded segment after the previous
+                    // one has positively returned to Idle.
+                    sendJogSegment()
                 } else {
                     // Process the next MPG detent or queued incremental movement.
                     startNextQueuedIncrement()
@@ -846,40 +860,104 @@ class PendantCommandController(
             return
         }
 
-        val signedDistance = jogDistance * jogSign
-        val formattedDistance = formatNumber(signedDistance)
-        val formattedFeed = formatNumber(jogFeedRate)
+        val speedMmMin = toMillimeters(jogFeedRate, jogUnits).toFloat()
+        val distanceMm = toMillimeters(jogDistance, jogUnits).toFloat()
+        val settingIdSpeed = if (continuousJog) 3 else 1 // $52 or $50
+        val settingIdDistance = if (continuousJog) 6 else 4 // $55 or $53
 
-        val unitsCode = if (jogUnits == MachineUnits.MILLIMETERS) {
-            "G21"
-        } else {
-            "G20"
+        val speedCached = if (continuousJog) runtimeFastSpeedMmMin else runtimeStepSpeedMmMin
+        val distanceCached = if (continuousJog) runtimeFastDistanceMm else runtimeStepDistanceMm
+
+        if (speedCached == null || speedCached != speedMmMin) {
+            if (!sendRuntimeSetting(settingIdSpeed, speedMmMin)) {
+                requestJogCancellation("Could not update the keypad jog speed.")
+                return
+            }
+            if (continuousJog) runtimeFastSpeedMmMin = speedMmMin
+            else runtimeStepSpeedMmMin = speedMmMin
         }
 
-        val command =
-            "\$J=$unitsCode G91 $axis$formattedDistance F$formattedFeed"
+        if (distanceCached == null || distanceCached != distanceMm) {
+            if (!sendRuntimeSetting(settingIdDistance, distanceMm)) {
+                requestJogCancellation("Could not update the keypad jog distance.")
+                return
+            }
+            if (continuousJog) runtimeFastDistanceMm = distanceMm
+            else runtimeStepDistanceMm = distanceMm
+        }
 
-        stage = Stage.WAITING_FOR_COMMAND
+        // Keypad mode 0 = Fast; mode 2 = Step.
+        val mode = if (continuousJog) '0' else '2'
+        val direction = when (axis to (jogSign < 0.0)) {
+            'X' to false -> 'R'
+            'X' to true -> 'L'
+            'Y' to false -> 'F'
+            'Y' to true -> 'B'
+            'Z' to false -> 'U'
+            else -> 'D'
+        }
+
+        stage = Stage.WAITING_FOR_JOG_IDLE
         idleConfirmationPending = false
 
         onMessageChanged(
             if (continuousJog) {
-                "Jogging $axis. Sending bounded movement segment..."
+                "Jogging $axis in short bounded segments..."
             } else {
                 "Sending incremental $axis jog..."
             }
         )
 
-        if (!bluetooth.sendCommand(command)) {
-            requestJogCancellation("Failed to send jog command.")
+        if (!bluetooth.sendRealtime(mode) ||
+            !bluetooth.sendRealtime(direction)
+        ) {
+            requestJogCancellation("Failed to send keypad jog command.")
+            return
+        }
+
+        // Keypad direction bytes do not return an 'ok'. Completion is
+        // determined from grblHAL status reports instead.
+        if (!bluetooth.sendRealtime('?')) {
+            requestJogCancellation("Could not verify keypad jog status.")
             return
         }
 
         startTimeout(5000) {
-            requestJogCancellation(
-                "Timed out waiting for jog command acceptance."
-            )
+            requestJogCancellation("Timed out waiting for keypad jog completion.")
         }
+    }
+
+    private fun toMillimeters(value: Double, units: MachineUnits): Double =
+        if (units == MachineUnits.MILLIMETERS) value else value * MM_PER_INCH
+
+    private fun sendRuntimeSetting(settingId: Int, value: Float): Boolean {
+        if (!value.isFinite() || value <= 0f) return false
+
+        val bits = java.lang.Float.floatToIntBits(value)
+        val packet = byteArrayOf(
+            0xF0.toByte(),
+            0x01,
+            settingId.toByte(),
+            bits.toByte(),
+            (bits ushr 8).toByte(),
+            (bits ushr 16).toByte(),
+            (bits ushr 24).toByte(),
+            0
+        )
+
+        var crc = 0
+        for (index in 1..6) {
+            crc = crc xor (packet[index].toInt() and 0xFF)
+            repeat(8) {
+                crc = if ((crc and 0x80) != 0) {
+                    ((crc shl 1) xor 0x07) and 0xFF
+                } else {
+                    (crc shl 1) and 0xFF
+                }
+            }
+        }
+        packet[7] = crc.toByte()
+        return bluetooth.sendBytes(packet)
     }
 
     // ------------------------------------------------
