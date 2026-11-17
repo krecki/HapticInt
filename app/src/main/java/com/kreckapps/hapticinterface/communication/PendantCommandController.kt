@@ -317,19 +317,13 @@ class PendantCommandController(
             units = units
         )
 
-        // If an incremental jog is already underway, queue this request.
-        // This allows rapid MPG detents and repeated incremental button presses
-        // to be processed in order instead of being discarded.
+        // Queue repeated keypad jog requests while a previous move is active.
         if (stage != Stage.IDLE) {
             val canQueue =
                 operation == Operation.JOG &&
                         !continuousJog &&
                         !jogStopRequested &&
-                        stage in listOf(
-                    Stage.WAITING_FOR_CONTROL,
-                    Stage.WAITING_FOR_COMMAND,
-                    Stage.WAITING_FOR_JOG_IDLE
-                )
+                        stage == Stage.WAITING_FOR_JOG_IDLE
 
             if (!canQueue) {
                 onMessageChanged("Another pendant operation is in progress.")
@@ -361,9 +355,10 @@ class PendantCommandController(
 
         loadJogRequest(request)
 
-        beginControlHandover(
-            "Requesting pendant control for incremental jog..."
-        )
+        // Keep MPG mode off so UART2 remains connected to the keypad plugin.
+        onBusyChanged(true)
+        onMessageChanged("Sending incremental keypad jog...")
+        sendJogSegment()
     }
 
     private fun loadJogRequest(request: JogRequest) {
@@ -378,7 +373,7 @@ class PendantCommandController(
         val next = pendingJogRequests.pollFirst()
 
         if (next == null) {
-            releaseControl("Incremental jog completed.")
+            finish("Incremental jog completed.")
             return
         }
 
@@ -441,9 +436,10 @@ class PendantCommandController(
         jogStopRequested = false
         idleConfirmationPending = false
 
-        beginControlHandover(
-            "Requesting pendant control for continuous jog..."
-        )
+        // Keep MPG mode off so UART2 remains connected to the keypad plugin.
+        onBusyChanged(true)
+        onMessageChanged("Starting keypad continuous jog...")
+        sendJogSegment()
     }
 
     /**
@@ -457,13 +453,6 @@ class PendantCommandController(
         jogStopRequested = true
 
         when (stage) {
-            Stage.WAITING_FOR_CONTROL -> {
-                // If control is granted, the status handler will release
-                // it without starting a jog.
-                onMessageChanged("Jog cancelled before starting.")
-            }
-
-            Stage.WAITING_FOR_COMMAND,
             Stage.WAITING_FOR_JOG_IDLE -> {
                 requestJogCancellation("Jog stopped.")
             }
@@ -484,9 +473,9 @@ class PendantCommandController(
         jogStopRequested = true
         idleConfirmationPending = false
 
-        if (currentStatus.pendantInControl != true) {
+        if (currentStatus.pendantInControl != false) {
             markControlUncertain(
-                "$message Pendant control is not confirmed. " +
+                "$message Keypad mode is not confirmed. " +
                         "Check the controller."
             )
             return
@@ -637,16 +626,7 @@ class PendantCommandController(
             Stage.WAITING_FOR_CONTROL -> {
                 if (currentStatus.pendantInControl == true) {
                     cancelTimeout()
-
-                    if (operation == Operation.JOG) {
-                        if (jogStopRequested) {
-                            releaseControl("Jog cancelled.")
-                        } else {
-                            sendJogSegment()
-                        }
-                    } else {
-                        sendPendingCommand()
-                    }
+                    sendPendingCommand()
                 }
             }
 
@@ -692,9 +672,9 @@ class PendantCommandController(
     }
 
     private fun handleJogStatus() {
-        if (currentStatus.pendantInControl != true) {
+        if (currentStatus.pendantInControl != false) {
             markControlUncertain(
-                "Pendant control was lost during jogging. " +
+                "Keypad input mode was lost during jogging. " +
                         "Check the controller."
             )
             return
@@ -702,9 +682,7 @@ class PendantCommandController(
 
         when (currentStatus.machineState) {
             "Alarm" -> {
-                releaseControl(
-                    "Jog ended in an alarm state. Check the controller."
-                )
+                finish("Jog ended in an alarm state. Check the controller.")
             }
 
             "Idle" -> {
@@ -727,7 +705,7 @@ class PendantCommandController(
                 cancelTimeout()
 
                 if (jogStopRequested || (continuousJog && !continuousJogActive)) {
-                    releaseControl("Jog stopped.")
+                    finish("Jog stopped.")
                 } else if (continuousJog) {
                     // Only send the next bounded segment after the previous
                     // one has positively returned to Idle.
@@ -865,9 +843,10 @@ class PendantCommandController(
             return
         }
 
-        if (currentStatus.pendantInControl != true) {
+        if (currentStatus.pendantInControl != false) {
             markControlUncertain(
-                "Cannot jog because pendant control is not confirmed."
+                "Cannot jog because keypad mode is not confirmed. " +
+                        "MPG mode must be off."
             )
             return
         }
