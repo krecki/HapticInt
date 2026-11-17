@@ -3,6 +3,7 @@ package com.kreckapps.hapticinterface.communication
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
 import java.math.BigDecimal
@@ -305,6 +306,7 @@ class PendantCommandController(
             return
         }
 
+        if (!validateJogDistance(distance, units)) return
         if (!validateFeedRate(feedRate, units)) return
 
         val request = JogRequest(
@@ -545,6 +547,21 @@ class PendantCommandController(
             return false
         }
 
+        return true
+    }
+
+    private fun validateJogDistance(
+        distance: Double,
+        units: MachineUnits
+    ): Boolean {
+        val distanceMm = toMillimeters(abs(distance), units)
+        if (distanceMm < 0.001 || distanceMm > 1000.0) {
+            onMessageChanged(
+                "Jog distance must be between 0.001 and 1000 mm " +
+                        "(0.00004 and 39.37 inches)."
+            )
+            return false
+        }
         return true
     }
 
@@ -868,6 +885,8 @@ class PendantCommandController(
         val speedCached = if (continuousJog) runtimeFastSpeedMmMin else runtimeStepSpeedMmMin
         val distanceCached = if (continuousJog) runtimeFastDistanceMm else runtimeStepDistanceMm
 
+        var settingPacketSent = false
+
         if (speedCached == null || speedCached != speedMmMin) {
             if (!sendRuntimeSetting(settingIdSpeed, speedMmMin)) {
                 requestJogCancellation("Could not update the keypad jog speed.")
@@ -875,16 +894,23 @@ class PendantCommandController(
             }
             if (continuousJog) runtimeFastSpeedMmMin = speedMmMin
             else runtimeStepSpeedMmMin = speedMmMin
+            settingPacketSent = true
         }
 
         if (distanceCached == null || distanceCached != distanceMm) {
+            // The firmware applies one packet at a time. Leave a short gap so
+            // its foreground task can consume the previous update first.
+            if (settingPacketSent) SystemClock.sleep(20)
             if (!sendRuntimeSetting(settingIdDistance, distanceMm)) {
                 requestJogCancellation("Could not update the keypad jog distance.")
                 return
             }
             if (continuousJog) runtimeFastDistanceMm = distanceMm
             else runtimeStepDistanceMm = distanceMm
+            settingPacketSent = true
         }
+
+        if (settingPacketSent) SystemClock.sleep(20)
 
         // Keypad mode 0 = Fast; mode 2 = Step.
         val mode = if (continuousJog) '0' else '2'
