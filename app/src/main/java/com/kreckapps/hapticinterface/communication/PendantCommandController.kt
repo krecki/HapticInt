@@ -22,7 +22,6 @@ class PendantCommandController(
         WAITING_FOR_MODAL_REPORT,
         WAITING_FOR_POSITION_REPORT,
         WAITING_FOR_HOMING_REPORT,
-        WAITING_FOR_JOG_IDLE,
         WAITING_FOR_RELEASE
     }
 
@@ -30,8 +29,7 @@ class PendantCommandController(
         SELECT_WCS,
         ZERO_AXIS,
         SET_AXIS,
-        HOME_MACHINE,
-        JOG
+        HOME_MACHINE
     }
     companion object {
         private val VALID_WCS = listOf(
@@ -65,16 +63,8 @@ class PendantCommandController(
     private var timeoutRunnable: Runnable? = null
     private var releaseMessage = ""
 
-    // Jog state
-    private var jogAxis: Char? = null
-    private var jogSign = 1.0
-    private var jogDistance = 0.0
-    private var jogFeedRate = 0.0
-    private var jogUnits = MachineUnits.MILLIMETERS
-
-    private var continuousJog = false
+    // True while the continuous direction key is held by the UI.
     private var continuousJogActive = false
-    private var jogStopRequested = false
 
     // Blocks new operations if the controller's MPG state is uncertain.
     private var controlStateUncertain = false
@@ -313,7 +303,6 @@ class PendantCommandController(
         }
         if (!validateFeedRate(feedRate, units) || !canSendKeypadJog()) return
 
-        continuousJog = true
         continuousJogActive = true
         jogStopRequested = false
 
@@ -390,8 +379,6 @@ class PendantCommandController(
     fun stopJog() {
         if (!continuousJogActive) return
         continuousJogActive = false
-        continuousJog = false
-        jogStopRequested = true
         if (currentStatus.connected && currentStatus.pendantInControl == false) {
             bluetooth.sendRealtime(JOG_CANCEL.toChar())
             onMessageChanged("Jog cancel sent.")
@@ -1011,12 +998,6 @@ class PendantCommandController(
         requestedValue = null
         operation = null
 
-        jogAxis = null
-        jogDistance = 0.0
-        jogFeedRate = 0.0
-        continuousJog = false
-        continuousJogActive = false
-        jogStopRequested = false
     }
 
     // ------------------------------------------------
