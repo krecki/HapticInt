@@ -59,6 +59,113 @@ static bool connected = false;
 static on_mpg_registered_ptr on_mpg_registered;
 #endif
 
+/*
+ * Runtime jog-setting protocol (UART mode):
+ *   0xF0, command(0x01), setting_id, float32_le, crc8
+ * CRC-8/ATM (poly 0x07, init 0), over command through float.
+ * Setting IDs 1..6 map to $50..$55. Updates are RAM-only.
+ */
+#define RUNTIME_SETTING_MAGIC 0xF0
+#define RUNTIME_SETTING_COMMAND 0x01
+#define RUNTIME_SETTING_PACKET_DATA 7
+
+static uint8_t runtime_setting_packet[RUNTIME_SETTING_PACKET_DATA];
+static uint_fast8_t runtime_setting_packet_index = 0;
+static volatile bool runtime_setting_pending = false;
+static uint8_t runtime_setting_id;
+static float runtime_setting_value;
+
+static uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
+{
+    uint8_t crc = 0;
+
+    for(uint_fast8_t i = 0; i < length; i++) {
+        crc ^= data[i];
+        for(uint_fast8_t bit = 0; bit < 8; bit++)
+            crc = (crc & 0x80) ? (uint8_t)((crc << 1) ^ 0x07) : (uint8_t)(crc << 1);
+    }
+
+    return crc;
+}
+
+static bool runtime_setting_valid (uint8_t id, float value)
+{
+    if(!(value >= 0.001f && value <= 100000.0f))
+        return false;
+
+    if(id >= 1 && id <= 3) // jog speeds, mm/min
+        return value >= 1.0f;
+
+    return id >= 4 && id <= 6; // jog distances, mm
+}
+
+FLASHMEM static void keypad_apply_runtime_setting (void *data)
+{
+    uint8_t id = runtime_setting_id;
+    float value = runtime_setting_value;
+
+    runtime_setting_pending = false;
+
+    // Do not change jog parameters while a keypad jog is active.
+    if(!jogging && runtime_setting_valid(id, value)) {
+        switch(id) {
+            case 1: jog.step_speed = value; break;
+            case 2: jog.slow_speed = value; break;
+            case 3: jog.fast_speed = value; break;
+            case 4: jog.step_distance = value; break;
+            case 5: jog.slow_distance = value; break;
+            case 6: jog.fast_distance = value; break;
+            default: return;
+        }
+
+        memcpy(&jogdata.settings, &jog, sizeof(jog_settings_t));
+
+        if(keypad.on_jogdata_changed)
+            keypad.on_jogdata_changed(&jogdata);
+    }
+}
+
+// Called from the UART realtime input handler. Returns true for bytes
+// belonging to a runtime-setting frame so they are not treated as keypresses.
+static ISR_CODE bool runtime_setting_receive (uint8_t c)
+{
+    if(runtime_setting_packet_index == 0) {
+        if(c == RUNTIME_SETTING_MAGIC) {
+            runtime_setting_packet_index = 1;
+            return true;
+        }
+        return false;
+    }
+
+    if(c == RUNTIME_SETTING_MAGIC) { // resynchronize on a new frame marker
+        runtime_setting_packet_index = 1;
+        return true;
+    }
+
+    runtime_setting_packet[runtime_setting_packet_index - 1] = c;
+
+    if(++runtime_setting_packet_index > RUNTIME_SETTING_PACKET_DATA) {
+        runtime_setting_packet_index = 0;
+
+        if(runtime_setting_packet[0] == RUNTIME_SETTING_COMMAND &&
+            runtime_setting_crc8(runtime_setting_packet, 6) == runtime_setting_packet[6] &&
+            !runtime_setting_pending) {
+
+            float value;
+            memcpy(&value, &runtime_setting_packet[2], sizeof(float));
+
+            if(runtime_setting_valid(runtime_setting_packet[1], value) && !jogging) {
+                runtime_setting_id = runtime_setting_packet[1];
+                runtime_setting_value = value;
+                runtime_setting_pending = true;
+                task_add_immediate(keypad_apply_runtime_setting, NULL);
+            }
+        }
+    }
+
+    return true;
+}
+
 keypad_t keypad = {0};
 
 FLASHMEM static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t offset)
@@ -486,6 +593,9 @@ FLASHMEM bool keypad_init (void)
 static ISR_CODE bool ISR_FUNC(keypad_enqueue_keycode)(uint8_t c)
 {
     uint32_t bptr = (keybuf.head + 1) & (KEYBUF_SIZE - 1);    // Get next head pointer
+
+    if(runtime_setting_receive(c))
+        return true;
 
 #if MPG_ENABLE && defined(MPG_STREAM) && MPG_STREAM != KEYPAD_STREAM
     if(c == CMD_MPG_MODE_TOGGLE)
