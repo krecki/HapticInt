@@ -149,6 +149,20 @@ fun PendantApp() {
         jogModeConfigurationAction?.invoke(mode, stepMm, jogFeedRateMmMin.toDouble())
     }
 
+    LaunchedEffect(
+        jogModeConfigurationAction,
+        selectedMode,
+        mpgResolution,
+        jogFeedRateMmMin,
+        displayUnits,
+        machineStatus.connected,
+        machineStatus.pendantInControl
+    ) {
+        if (machineStatus.connected && machineStatus.pendantInControl == false) {
+            configureSelectedJogMode(selectedMode)
+        }
+    }
+
     fun stopActiveJog() {
         if (activeJog != null) {
             stopJogAction?.invoke()
