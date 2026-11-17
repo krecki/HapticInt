@@ -3,12 +3,10 @@ package com.kreckapps.hapticinterface.communication
 
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
 import java.math.BigDecimal
 import kotlin.math.abs
-import java.util.ArrayDeque
 
 class PendantCommandController(
     private val bluetooth: PendantBluetoothManager,
@@ -35,18 +33,7 @@ class PendantCommandController(
         HOME_MACHINE,
         JOG
     }
-    private data class JogRequest(
-        val axis: Char,
-        val distance: Double,
-        val negative: Boolean,
-        val feedRate: Double,
-        val units: MachineUnits
-    )
-
-    private val pendingJogRequests = ArrayDeque<JogRequest>()
-
     companion object {
-        const val MAX_PENDING_JOG_REQUESTS = 64
         private val VALID_WCS = listOf(
             "G54", "G55", "G56",
             "G57", "G58", "G59"
@@ -59,7 +46,7 @@ class PendantCommandController(
 
         private const val POSITION_TOLERANCE = 0.001
 
-        private const val CONTINUOUS_SEGMENT_MM = 0.5
+        private const val CONTINUOUS_JOG_DISTANCE_MM = 220.0
 
         private const val MAX_FEED_MM_MIN = 2000.0
         private const val MM_PER_INCH = 25.4
@@ -88,10 +75,6 @@ class PendantCommandController(
     private var continuousJog = false
     private var continuousJogActive = false
     private var jogStopRequested = false
-
-    // Prevents a single early Idle report from being treated as
-    // confirmation that a jog has finished.
-    private var idleConfirmationPending = false
 
     // Blocks new operations if the controller's MPG state is uncertain.
     private var controlStateUncertain = false
@@ -279,14 +262,12 @@ class PendantCommandController(
     }
 
     // ------------------------------------------------
-    // Incremental jog
+    // Keypad jogging - fire-and-forget from Android
     // ------------------------------------------------
 
     /**
-     * Sends one incremental jog.
-     *
-     * distance and feedRate use the selected units:
-     * mm and mm/min, or inches and inches/min.
+     * Sends one keypad Step-mode jog immediately. No Android-side movement
+     * queue is maintained and completion status is not awaited.
      */
     fun jogIncrement(
         axis: Char,
@@ -295,108 +276,28 @@ class PendantCommandController(
         units: MachineUnits
     ) {
         val normalizedAxis = axis.uppercaseChar()
-
         if (normalizedAxis !in VALID_AXES) {
             onMessageChanged("Invalid jog axis.")
             return
         }
+        if (!distance.isFinite() || distance == 0.0 ||
+            !validateJogDistance(distance, units) ||
+            !validateFeedRate(feedRate, units)) return
+        if (!canSendKeypadJog()) return
 
-        if (!distance.isFinite() || distance == 0.0) {
-            onMessageChanged("Jog distance must be a nonzero number.")
-            return
-        }
-
-        if (!validateJogDistance(distance, units)) return
-        if (!validateFeedRate(feedRate, units)) return
-
-        val request = JogRequest(
+        sendKeypadJog(
             axis = normalizedAxis,
-            distance = abs(distance),
             negative = distance < 0.0,
-            feedRate = feedRate,
-            units = units
+            distanceMm = toMillimeters(abs(distance), units),
+            feedRateMmMin = toMillimeters(feedRate, units),
+            mode = '2',
+            continuous = false
         )
-
-        // Queue repeated keypad jog requests while a previous move is active.
-        if (stage != Stage.IDLE) {
-            val canQueue =
-                operation == Operation.JOG &&
-                        !continuousJog &&
-                        !jogStopRequested &&
-                        stage == Stage.WAITING_FOR_JOG_IDLE
-
-            if (!canQueue) {
-                onMessageChanged("Another pendant operation is in progress.")
-                return
-            }
-
-            if (pendingJogRequests.size >= MAX_PENDING_JOG_REQUESTS) {
-                onMessageChanged("Jog queue is full. Release the jog control and try again.")
-                return
-            }
-
-            pendingJogRequests.addLast(request)
-            onMessageChanged(
-                "Jog queued: ${if (distance < 0.0) "-" else "+"}$normalizedAxis. " +
-                        "${pendingJogRequests.size} movement(s) waiting."
-            )
-            return
-        }
-
-        if (!canStartOperation()) return
-
-        operation = Operation.JOG
-        continuousJog = false
-        continuousJogActive = false
-        jogStopRequested = false
-        idleConfirmationPending = false
-
-        pendingJogRequests.clear()
-
-        loadJogRequest(request)
-
-        // Keep MPG mode off so UART2 remains connected to the keypad plugin.
-        onBusyChanged(true)
-        onMessageChanged("Sending incremental keypad jog...")
-        sendJogSegment()
     }
-
-    private fun loadJogRequest(request: JogRequest) {
-        jogAxis = request.axis
-        jogSign = if (request.negative) -1.0 else 1.0
-        jogDistance = request.distance
-        jogFeedRate = request.feedRate
-        jogUnits = request.units
-    }
-
-    private fun startNextQueuedIncrement() {
-        val next = pendingJogRequests.pollFirst()
-
-        if (next == null) {
-            finish("Incremental jog completed.")
-            return
-        }
-
-        loadJogRequest(next)
-
-        onMessageChanged(
-            "Sending next queued ${next.axis} jog. " +
-                    "${pendingJogRequests.size} movement(s) remaining."
-        )
-
-        sendJogSegment()
-    }
-
-    // ------------------------------------------------
-    // Continuous jog
-    // ------------------------------------------------
 
     /**
-     * Starts repeated bounded jog segments.
-     *
-     * direction examples: "+X", "-X", "+Y", "-Y", "+Z", "-Z".
-     *
-     * Each segment is 0.5 mm, or its equivalent in inches.
+     * Continuous mode uses a long finite keypad jog. The physical key-up
+     * event sends the keypad plugin's realtime jog-cancel byte.
      */
     fun startContinuousJog(
         direction: String,
@@ -404,100 +305,149 @@ class PendantCommandController(
         units: MachineUnits
     ) {
         val normalized = direction.trim().uppercase()
-
-        if (
-            normalized.length != 2 ||
+        if (normalized.length != 2 ||
             (normalized[0] != '+' && normalized[0] != '-') ||
-            normalized[1] !in VALID_AXES
-        ) {
+            normalized[1] !in VALID_AXES) {
             onMessageChanged("Invalid jog direction.")
             return
         }
+        if (!validateFeedRate(feedRate, units) || !canSendKeypadJog()) return
 
-        if (!validateFeedRate(feedRate, units)) return
-        if (!canStartOperation()) return
-
-        // Direction is formatted as sign first, axis second.
-        jogAxis = normalized[1]
-        jogSign = if (normalized[0] == '+') 1.0 else -1.0
-
-        jogDistance = if (units == MachineUnits.MILLIMETERS) {
-            CONTINUOUS_SEGMENT_MM
-        } else {
-            CONTINUOUS_SEGMENT_MM / MM_PER_INCH
-        }
-
-        jogFeedRate = feedRate
-        jogUnits = units
-
-        operation = Operation.JOG
         continuousJog = true
         continuousJogActive = true
         jogStopRequested = false
-        idleConfirmationPending = false
 
-        // Keep MPG mode off so UART2 remains connected to the keypad plugin.
-        onBusyChanged(true)
-        onMessageChanged("Starting keypad continuous jog...")
-        sendJogSegment()
+        sendKeypadJog(
+            axis = normalized[1],
+            negative = normalized[0] == '-',
+            distanceMm = CONTINUOUS_JOG_DISTANCE_MM,
+            feedRateMmMin = toMillimeters(feedRate, units),
+            mode = '0',
+            continuous = true
+        )
+    }
+
+    /** Update the fast jog speed as the continuous-mode slider changes. */
+    fun updateContinuousJogSpeed(feedRate: Double, units: MachineUnits) {
+        if (!validateFeedRate(feedRate, units)) return
+        if (!canSendKeypadJog()) return
+        val speed = toMillimeters(feedRate, units).toFloat()
+        if (runtimeFastSpeedMmMin != speed) {
+            if (sendRuntimeSetting(3, speed)) {
+                runtimeFastSpeedMmMin = speed
+                onMessageChanged("Continuous jog speed updated.")
+            }
+        }
+    }
+
+    /** Update the Step-mode feed and distance without starting a move. */
+    fun configureStepJog(distance: Double, feedRate: Double, units: MachineUnits) {
+        if (!distance.isFinite() || distance <= 0.0 ||
+            !validateJogDistance(distance, units) ||
+            !validateFeedRate(feedRate, units) ||
+            !canSendKeypadJog()) return
+
+        val speed = toMillimeters(feedRate, units).toFloat()
+        val step = toMillimeters(distance, units).toFloat()
+        if (runtimeStepSpeedMmMin != speed && sendRuntimeSetting(1, speed))
+            runtimeStepSpeedMmMin = speed
+        if (runtimeStepDistanceMm != step && sendRuntimeSetting(4, step))
+            runtimeStepDistanceMm = step
     }
 
     /**
-     * Stops continuous jogging or cancels an incremental jog
-     * that is currently in progress.
+     * A keypad key-up is sent immediately. The controller's status reports
+     * are deliberately not part of the jog command pipeline.
      */
     fun stopJog() {
-        if (operation != Operation.JOG) return
-
+        if (!continuousJogActive) return
         continuousJogActive = false
+        continuousJog = false
         jogStopRequested = true
-
-        when (stage) {
-            Stage.WAITING_FOR_JOG_IDLE -> {
-                requestJogCancellation("Jog stopped.")
-            }
-
-            else -> Unit
+        if (currentStatus.connected && currentStatus.pendantInControl == false) {
+            bluetooth.sendRealtime(JOG_CANCEL.toChar())
+            onMessageChanged("Jog cancel sent.")
+        } else {
+            onMessageChanged("Cannot send jog cancel: keypad mode is not confirmed.")
         }
     }
 
-    /**
-     * Sends the keypad plugin's real-time jog-cancel byte and waits for
-     * an Idle report. Keypad jogging runs with MPG mode disabled.
-     */
-    private fun requestJogCancellation(message: String) {
-        cancelTimeout()
+    private fun canSendKeypadJog(): Boolean {
+        if (!currentStatus.connected) {
+            onMessageChanged("Pendant is not connected.")
+            return false
+        }
+        if (controlStateUncertain || currentStatus.pendantInControl != false) {
+            onMessageChanged("Controller must be in keypad/listening mode (MPG off).")
+            return false
+        }
+        if (stage != Stage.IDLE || operation != null) {
+            onMessageChanged("Another pendant operation is in progress.")
+            return false
+        }
+        return true
+    }
 
-        continuousJogActive = false
-        jogStopRequested = true
-        idleConfirmationPending = false
+    private fun sendKeypadJog(
+        axis: Char,
+        negative: Boolean,
+        distanceMm: Double,
+        feedRateMmMin: Double,
+        mode: Char,
+        continuous: Boolean
+    ) {
+        val speedId = if (continuous) 3 else 1
+        val distanceId = if (continuous) 6 else 4
+        val speed = feedRateMmMin.toFloat()
+        val distance = distanceMm.toFloat()
 
-        if (currentStatus.pendantInControl != false) {
-            markControlUncertain(
-                "$message Keypad mode is not confirmed. " +
-                        "Check the controller."
-            )
+        if (!speed.isFinite() || !distance.isFinite()) return
+
+        // Send only changed runtime settings. The keypad firmware stores these
+        // in RAM; no $ settings command or NVS write is performed.
+        if (continuous) {
+            if (runtimeFastSpeedMmMin != speed) {
+                if (!sendRuntimeSetting(speedId, speed)) {
+                    onMessageChanged("Could not update keypad jog feed rate.")
+                    return
+                }
+                runtimeFastSpeedMmMin = speed
+            }
+            if (runtimeFastDistanceMm != distance) {
+                if (!sendRuntimeSetting(distanceId, distance)) {
+                    onMessageChanged("Could not update keypad jog distance.")
+                    return
+                }
+                runtimeFastDistanceMm = distance
+            }
+        } else {
+            if (runtimeStepSpeedMmMin != speed) {
+                if (!sendRuntimeSetting(speedId, speed)) {
+                    onMessageChanged("Could not update keypad jog feed rate.")
+                    return
+                }
+                runtimeStepSpeedMmMin = speed
+            }
+            if (runtimeStepDistanceMm != distance) {
+                if (!sendRuntimeSetting(distanceId, distance)) {
+                    onMessageChanged("Could not update keypad jog distance.")
+                    return
+                }
+                runtimeStepDistanceMm = distance
+            }
+        }
+
+        val direction = when (axis) {
+            'X' -> if (negative) 'L' else 'R'
+            'Y' -> if (negative) 'B' else 'F'
+            else -> if (negative) 'D' else 'U'
+        }
+
+        if (!bluetooth.sendRealtime(mode) || !bluetooth.sendRealtime(direction)) {
+            onMessageChanged("Failed to send keypad jog command.")
             return
         }
-
-        stage = Stage.WAITING_FOR_JOG_IDLE
-        onMessageChanged("Cancelling jog...")
-
-        if (!bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
-            markControlUncertain(
-                "Could not send jog cancel. Check the controller."
-            )
-            return
-        }
-
-        bluetooth.sendRealtime('?')
-
-        startTimeout(5000) {
-            markControlUncertain(
-                "Jog cancellation could not be confirmed. " +
-                        "Check the controller before continuing."
-            )
-        }
+        onMessageChanged(if (continuous) "Continuous $axis jog started." else "$axis step jog sent.")
     }
 
     // ------------------------------------------------
@@ -700,8 +650,7 @@ class PendantCommandController(
                     return
                 }
 
-                idleConfirmationPending = false
-                cancelTimeout()
+                        cancelTimeout()
 
                 if (jogStopRequested || (continuousJog && !continuousJogActive)) {
                     finish("Jog stopped.")
@@ -829,105 +778,6 @@ class PendantCommandController(
         }
     }
 
-    // ------------------------------------------------
-    // Send one bounded jog segment
-    // ------------------------------------------------
-
-    private fun sendJogSegment() {
-        if (
-            jogStopRequested ||
-            (continuousJog && !continuousJogActive)
-        ) {
-            finish("Jog cancelled.")
-            return
-        }
-
-        if (currentStatus.pendantInControl != false) {
-            markControlUncertain(
-                "Cannot jog because keypad mode is not confirmed. " +
-                        "MPG mode must be off."
-            )
-            return
-        }
-
-        val axis = jogAxis ?: run {
-            finish("No jog axis was selected.")
-            return
-        }
-
-        val speedMmMin = toMillimeters(jogFeedRate, jogUnits).toFloat()
-        val distanceMm = toMillimeters(jogDistance, jogUnits).toFloat()
-        val settingIdSpeed = if (continuousJog) 3 else 1 // $52 or $50
-        val settingIdDistance = if (continuousJog) 6 else 4 // $55 or $53
-
-        val speedCached = if (continuousJog) runtimeFastSpeedMmMin else runtimeStepSpeedMmMin
-        val distanceCached = if (continuousJog) runtimeFastDistanceMm else runtimeStepDistanceMm
-
-        var settingPacketSent = false
-
-        if (speedCached == null || speedCached != speedMmMin) {
-            if (!sendRuntimeSetting(settingIdSpeed, speedMmMin)) {
-                requestJogCancellation("Could not update the keypad jog speed.")
-                return
-            }
-            if (continuousJog) runtimeFastSpeedMmMin = speedMmMin
-            else runtimeStepSpeedMmMin = speedMmMin
-            settingPacketSent = true
-        }
-
-        if (distanceCached == null || distanceCached != distanceMm) {
-            // The firmware applies one packet at a time. Leave a short gap so
-            // its foreground task can consume the previous update first.
-            if (settingPacketSent) SystemClock.sleep(20)
-            if (!sendRuntimeSetting(settingIdDistance, distanceMm)) {
-                requestJogCancellation("Could not update the keypad jog distance.")
-                return
-            }
-            if (continuousJog) runtimeFastDistanceMm = distanceMm
-            else runtimeStepDistanceMm = distanceMm
-            settingPacketSent = true
-        }
-
-        if (settingPacketSent) SystemClock.sleep(20)
-
-        // Keypad mode 0 = Fast; mode 2 = Step.
-        val mode = if (continuousJog) '0' else '2'
-        val direction = when (axis) {
-            'X' -> if (jogSign < 0.0) 'L' else 'R'
-            'Y' -> if (jogSign < 0.0) 'B' else 'F'
-            else -> if (jogSign < 0.0) 'D' else 'U'
-        }
-
-        stage = Stage.WAITING_FOR_JOG_IDLE
-        idleConfirmationPending = false
-
-        onMessageChanged(
-            if (continuousJog) {
-                "Jogging $axis in short bounded segments..."
-            } else {
-                "Sending incremental $axis jog..."
-            }
-        )
-
-        if (!bluetooth.sendRealtime(mode) ||
-            !bluetooth.sendRealtime(direction)
-        ) {
-            requestJogCancellation("Failed to send keypad jog command.")
-            return
-        }
-
-        // Keypad direction bytes do not return an 'ok'. Completion is
-        // determined from grblHAL status reports instead.
-        if (!bluetooth.sendRealtime('?')) {
-            requestJogCancellation("Could not verify keypad jog status.")
-            return
-        }
-
-        startTimeout(5000) {
-            requestJogCancellation("Timed out waiting for keypad jog completion.")
-        }
-    }
-
     private fun toMillimeters(value: Double, units: MachineUnits): Double =
         if (units == MachineUnits.MILLIMETERS) value else value * MM_PER_INCH
 
@@ -1033,39 +883,6 @@ class PendantCommandController(
                         "Homing was accepted, but its final state " +
                                 "could not be confirmed."
                     )
-                }
-            }
-
-            Operation.JOG -> {
-                cancelTimeout()
-
-                if (continuousJog) {
-                    // Keep feeding the controller while the jog button is held.
-                    // Do not wait for the previous segment to reach Idle.
-                    if (continuousJogActive && !jogStopRequested) {
-                        sendJogSegment()
-                    } else {
-                        requestJogCancellation("Jog stopped.")
-                    }
-                } else {
-                    // Incremental jogs still wait for confirmed completion.
-                    stage = Stage.WAITING_FOR_JOG_IDLE
-                    idleConfirmationPending = false
-
-                    onMessageChanged("Jog accepted. Waiting for completion...")
-
-                    if (!bluetooth.sendRealtime('?')) {
-                        requestJogCancellation(
-                            "Could not verify jog completion."
-                        )
-                        return
-                    }
-
-                    startTimeout(5000) {
-                        requestJogCancellation(
-                            "Timed out waiting for jog completion."
-                        )
-                    }
                 }
             }
 
@@ -1235,7 +1052,6 @@ class PendantCommandController(
         continuousJogActive = false
         jogStopRequested = false
         idleConfirmationPending = false
-        pendingJogRequests.clear()
     }
 
     // ------------------------------------------------
@@ -1261,9 +1077,7 @@ class PendantCommandController(
 
         // Best-effort cleanup if the app is destroyed during a jog or
         // while a coordinate/homing operation has MPG control.
-        if (operation == Operation.JOG) {
-            bluetooth.sendRealtime(JOG_CANCEL.toChar())
-        }
+        if (continuousJogActive) bluetooth.sendRealtime(JOG_CANCEL.toChar())
 
         if (currentStatus.pendantInControl == true) {
             bluetooth.sendRealtime(MPG_TOGGLE.toChar())
