@@ -914,13 +914,10 @@ class PendantCommandController(
 
         // Keypad mode 0 = Fast; mode 2 = Step.
         val mode = if (continuousJog) '0' else '2'
-        val direction = when (axis to (jogSign < 0.0)) {
-            'X' to false -> 'R'
-            'X' to true -> 'L'
-            'Y' to false -> 'F'
-            'Y' to true -> 'B'
-            'Z' to false -> 'U'
-            else -> 'D'
+        val direction = when (axis) {
+            'X' -> if (jogSign < 0.0) 'L' else 'R'
+            'Y' -> if (jogSign < 0.0) 'B' else 'F'
+            else -> if (jogSign < 0.0) 'D' else 'U'
         }
 
         stage = Stage.WAITING_FOR_JOG_IDLE
