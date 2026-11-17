@@ -591,6 +591,13 @@ static ISR_CODE bool ISR_FUNC(keypad_enqueue_keycode)(uint8_t c)
 
     if(runtime_setting_receive(c))
         return true;
+        
+    // Pass full status report requests directly to grblHAL.
+    // Do not let the keypad plugin consume them as keypresses.
+    if(c == CMD_STATUS_REPORT_ALL) {
+        grbl.enqueue_realtime_command(c);
+        return true;
+    }
 
 #if MPG_ENABLE && defined(MPG_STREAM) && MPG_STREAM != KEYPAD_STREAM
     if(c == CMD_MPG_MODE_TOGGLE)

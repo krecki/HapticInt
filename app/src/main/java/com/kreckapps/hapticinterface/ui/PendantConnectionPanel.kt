@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.communication.PendantBluetoothManager
 import com.kreckapps.hapticinterface.communication.PendantCommandController
@@ -269,44 +270,32 @@ fun PendantConnectionPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp, max = 44.dp)
             ) {
-                Text(
-                    text = "Pendant Connection",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
                 Text(
                     text = connectionMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Text(
                     text = when {
                         !currentStatus.connected ->
                             "Pendant mode: Not connected"
-
                         currentStatus.pendantInControl == true ->
                             "Pendant mode: In control"
-
                         currentStatus.pendantInControl == false ->
                             "Pendant mode: Listening"
-
                         else ->
                             "Pendant mode: Waiting for controller..."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        currentStatus.pendantInControl == true ->
-                            MaterialTheme.colorScheme.tertiary
-
-                        currentStatus.pendantInControl == false ->
-                            MaterialTheme.colorScheme.primary
-
-                        else ->
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
