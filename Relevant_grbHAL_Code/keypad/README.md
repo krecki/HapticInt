@@ -83,6 +83,39 @@ Character to action map:
 <sup>3</sup> The [fans plugin](https://github.com/grblHAL/Plugin_fans) is required.  
 <sup>4</sup> Only available when the machine is in _Hold_ state.  
 
+### Runtime jog-setting updates (UART mode)
+
+UART mode also accepts a binary command for changing jog settings in RAM without
+writing them to NVS/flash. This is intended for pendant applications that need
+to change jog speed or distance frequently.
+
+Packet format (8 bytes total):
+
+| Byte | Meaning |
+|------|---------|
+| 0 | `0xF0` frame marker |
+| 1 | `0x01` command |
+| 2 | Setting ID (`1` through `6`, corresponding to `$50` through `$55`) |
+| 3–6 | IEEE-754 32-bit float, little-endian |
+| 7 | CRC-8/ATM of bytes 1–6 (polynomial `0x07`, initial value `0x00`) |
+
+Setting IDs:
+
+| ID | Setting | Units |
+|----|---------|-------|
+| 1 | `$50` Step jog speed | mm/min |
+| 2 | `$51` Slow jog speed | mm/min |
+| 3 | `$52` Fast jog speed | mm/min |
+| 4 | `$53` Step jog distance | mm |
+| 5 | `$54` Slow jog distance | mm |
+| 6 | `$55` Fast jog distance | mm |
+
+Runtime updates are not saved. The normal `$50`–`$55` settings and their
+existing persistence behavior are unchanged. Speed values must be from 1 to
+100000 mm/min; distance values must be from 0.001 to 1000 mm. An update is
+ignored if a keypad jog is active. The sender should send a setting packet
+before the next jog command and should resend the value after reconnecting.
+
 ---
 
 Dependencies:
