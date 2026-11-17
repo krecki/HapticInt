@@ -606,10 +606,6 @@ class PendantCommandController(
                 }
             }
 
-            Stage.WAITING_FOR_JOG_IDLE -> {
-                handleJogStatus()
-            }
-
             Stage.WAITING_FOR_RELEASE -> {
                 if (currentStatus.pendantInControl == false) {
                     finish(releaseMessage)
@@ -617,57 +613,6 @@ class PendantCommandController(
             }
 
             else -> Unit
-        }
-    }
-
-    private fun handleJogStatus() {
-        if (currentStatus.pendantInControl != false) {
-            markControlUncertain(
-                "Keypad input mode was lost during jogging. " +
-                        "Check the controller."
-            )
-            return
-        }
-
-        when (currentStatus.machineState) {
-            "Alarm" -> {
-                finish("Jog ended in an alarm state. Check the controller.")
-            }
-
-            "Idle" -> {
-                // Require a second Idle observation after a fresh status
-                // request. This helps avoid treating an early status report
-                // as proof that a newly accepted jog has already finished.
-                if (!idleConfirmationPending) {
-                    idleConfirmationPending = true
-
-                    handler.postDelayed({
-                        if (stage == Stage.WAITING_FOR_JOG_IDLE) {
-                            bluetooth.sendRealtime('?')
-                        }
-                    }, 100)
-
-                    return
-                }
-
-                        cancelTimeout()
-
-                if (jogStopRequested || (continuousJog && !continuousJogActive)) {
-                    finish("Jog stopped.")
-                } else if (continuousJog) {
-                    // Only send the next bounded segment after the previous
-                    // one has positively returned to Idle.
-                    sendJogSegment()
-                } else {
-                    // Process the next MPG detent or queued incremental movement.
-                    startNextQueuedIncrement()
-                }
-            }
-
-            else -> {
-                // The machine is still moving or changing state.
-                idleConfirmationPending = false
-            }
         }
     }
 
@@ -966,13 +911,6 @@ class PendantCommandController(
     private fun handleCommandError(error: String) {
         if (stage == Stage.IDLE) return
 
-        if (operation == Operation.JOG) {
-            requestJogCancellation(
-                "Controller rejected the jog command ($error)."
-            )
-            return
-        }
-
         if (currentStatus.pendantInControl == true) {
             releaseControl(
                 "Controller rejected the command ($error)."
@@ -1051,7 +989,6 @@ class PendantCommandController(
         continuousJog = false
         continuousJogActive = false
         jogStopRequested = false
-        idleConfirmationPending = false
     }
 
     // ------------------------------------------------
