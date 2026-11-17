@@ -286,6 +286,11 @@ FLASHMEM static void keypad_process_keypress (void *data)
     char command[35] = "", keycode = keypad_get_keycode();
     sys_state_t state = state_get();
 
+    // A setting frame may have arrived immediately before this keypress.
+    // Drain those updates first so the jog uses the newly selected values.
+    while(runtime_setting_tail != runtime_setting_head)
+        keypad_apply_runtime_setting(NULL);
+
     if((state & (STATE_ESTOP|STATE_ALARM)) &&
         !(keycode == CMD_STATUS_REPORT ||
            keycode == CMD_STATUS_REPORT_LEGACY ||
