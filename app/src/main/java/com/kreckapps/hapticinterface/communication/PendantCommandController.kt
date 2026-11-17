@@ -343,34 +343,6 @@ class PendantCommandController(
         }
     }
 
-    /** Update the fast jog speed as the continuous-mode slider changes. */
-    fun updateContinuousJogSpeed(feedRate: Double, units: MachineUnits) {
-        if (!validateFeedRate(feedRate, units)) return
-        if (!canSendKeypadJog()) return
-        val speed = toMillimeters(feedRate, units).toFloat()
-        if (runtimeFastSpeedMmMin != speed) {
-            if (sendRuntimeSetting(3, speed)) {
-                runtimeFastSpeedMmMin = speed
-                onMessageChanged("Continuous jog speed updated.")
-            }
-        }
-    }
-
-    /** Update the Step-mode feed and distance without starting a move. */
-    fun configureStepJog(distance: Double, feedRate: Double, units: MachineUnits) {
-        if (!distance.isFinite() || distance <= 0.0 ||
-            !validateJogDistance(distance, units) ||
-            !validateFeedRate(feedRate, units) ||
-            !canSendKeypadJog()) return
-
-        val speed = toMillimeters(feedRate, units).toFloat()
-        val step = toMillimeters(distance, units).toFloat()
-        if (runtimeStepSpeedMmMin != speed && sendRuntimeSetting(1, speed))
-            runtimeStepSpeedMmMin = speed
-        if (runtimeStepDistanceMm != step && sendRuntimeSetting(4, step))
-            runtimeStepDistanceMm = step
-    }
-
     /**
      * A keypad key-up is sent immediately. The controller's status reports
      * are deliberately not part of the jog command pipeline.
