@@ -69,10 +69,13 @@ static on_mpg_registered_ptr on_mpg_registered;
 #define RUNTIME_SETTING_COMMAND 0x01
 #define RUNTIME_SETTING_PACKET_DATA 7
 
+#define RUNTIME_SETTING_QUEUE_SIZE 8
+
 static uint8_t runtime_setting_packet[RUNTIME_SETTING_PACKET_DATA];
-static uint8_t runtime_setting_payload[6];
+static uint8_t runtime_setting_queue[RUNTIME_SETTING_QUEUE_SIZE][6];
+static volatile uint_fast8_t runtime_setting_head = 0;
+static volatile uint_fast8_t runtime_setting_tail = 0;
 static uint_fast8_t runtime_setting_packet_index = 0;
-static volatile bool runtime_setting_pending = false;
 
 static ISR_CODE uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
 {
@@ -102,12 +105,20 @@ FLASHMEM static void keypad_apply_runtime_setting (void *data)
 {
     uint8_t packet[6];
     float value;
+    uint_fast8_t tail = runtime_setting_tail;
 
-    memcpy(packet, runtime_setting_payload, sizeof(packet));
-    runtime_setting_pending = false;
+    if(tail == runtime_setting_head)
+        return;
+
+    memcpy(packet, runtime_setting_queue[tail], sizeof(packet));
+    runtime_setting_tail = (tail + 1) & (RUNTIME_SETTING_QUEUE_SIZE - 1);
     memcpy(&value, &packet[2], sizeof(float));
 
-    // Do not change jog parameters while a keypad jog is active.
+    // Step jogs are finite. Clear the plugin's held-key flag once grblHAL
+    // has left STATE_JOG, otherwise later runtime updates would be blocked.
+    if(jogging && !(state_get() & STATE_JOG))
+        jogging = false;
+
     if(!jogging && packet[0] == RUNTIME_SETTING_COMMAND && runtime_setting_valid(packet[1], value)) {
         switch(packet[1]) {
             case 1: jog.step_speed = value; break;
@@ -116,7 +127,7 @@ FLASHMEM static void keypad_apply_runtime_setting (void *data)
             case 4: jog.step_distance = value; break;
             case 5: jog.slow_distance = value; break;
             case 6: jog.fast_distance = value; break;
-            default: return;
+            default: break;
         }
 
         memcpy(&jogdata.settings, &jog, sizeof(jog_settings_t));
@@ -124,6 +135,9 @@ FLASHMEM static void keypad_apply_runtime_setting (void *data)
         if(keypad.on_jogdata_changed)
             keypad.on_jogdata_changed(&jogdata);
     }
+
+    if(runtime_setting_tail != runtime_setting_head)
+        task_add_immediate(keypad_apply_runtime_setting, NULL);
 }
 
 // Called from the UART realtime input handler. Returns true for bytes
@@ -147,14 +161,18 @@ static ISR_CODE bool runtime_setting_receive (uint8_t c)
         runtime_setting_packet_index = 0;
 
         if(runtime_setting_packet[0] == RUNTIME_SETTING_COMMAND &&
-            runtime_setting_crc8(runtime_setting_packet, 6) == runtime_setting_packet[6] &&
-            !runtime_setting_pending) {
+            runtime_setting_crc8(runtime_setting_packet, 6) == runtime_setting_packet[6]) {
 
-            for(uint_fast8_t i = 0; i < sizeof(runtime_setting_payload); i++)
-                runtime_setting_payload[i] = runtime_setting_packet[i];
+            uint_fast8_t head = runtime_setting_head;
+            uint_fast8_t next = (head + 1) & (RUNTIME_SETTING_QUEUE_SIZE - 1);
 
-            runtime_setting_pending = true;
-            task_add_immediate(keypad_apply_runtime_setting, NULL);
+            if(next != runtime_setting_tail) {
+                for(uint_fast8_t i = 0; i < 6; i++)
+                    runtime_setting_queue[head][i] = runtime_setting_packet[i];
+
+                runtime_setting_head = next;
+                task_add_immediate(keypad_apply_runtime_setting, NULL);
+            }
         }
     }
 
