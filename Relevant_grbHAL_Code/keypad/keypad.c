@@ -34,7 +34,7 @@
 #include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
 
-#define KEYPAD_VERSION "1.47"
+#define KEYPAD_VERSION "1.48"
 
 typedef struct {
     char buf[KEYBUF_SIZE];
@@ -90,7 +90,7 @@ static ISR_CODE uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t 
 static bool runtime_setting_valid (uint8_t id, float value)
 {
     if(id >= 1 && id <= 3) // jog speeds, mm/min
-        return value >= 1.0f && value <= 100000.0f;
+        return value >= 1.0f && value <= 10000.0f;
 
     if(id >= 4 && id <= 6) // jog distances, mm
         return value >= 0.001f && value <= 1000.0f;
