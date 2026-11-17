@@ -83,6 +83,12 @@ fun PendantApp() {
         mutableStateOf<(() -> Unit)?>(null)
     }
 
+    var jogModeConfigurationAction by remember {
+        mutableStateOf<((Int, Double, Double) -> Unit)?>(null)
+    }
+
+    var wasConnected by remember { mutableStateOf(false) }
+
     var coordinateCommandBusy by remember {
         mutableStateOf(false)
     }
@@ -130,6 +136,17 @@ fun PendantApp() {
         } else {
             safeValue * MM_PER_INCH
         }
+    }
+
+    fun configureSelectedJogMode(mode: Int) {
+        val stepMm = if (mode == 0) {
+            (mpgResolution.toDoubleOrNull() ?: 0.01) *
+                    if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+        } else {
+            (axisSteps["X"]?.toDoubleOrNull() ?: 0.01) *
+                    if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+        }
+        jogModeConfigurationAction?.invoke(mode, stepMm, jogFeedRateMmMin.toDouble())
     }
 
     fun stopActiveJog() {
@@ -181,12 +198,18 @@ fun PendantApp() {
                 onMachineStatusChanged = { newStatus ->
                     machineStatus = newStatus
 
-                    if (
-                        !displayUnitsInitialized &&
-                        newStatus.position.modalStateKnown
-                    ) {
-                        displayUnits = newStatus.position.units
-                        displayUnitsInitialized = true
+                    if (!newStatus.connected) {
+                        wasConnected = false
+                        displayUnitsInitialized = false
+                    } else {
+                        if (!wasConnected) {
+                            wasConnected = true
+                            displayUnitsInitialized = false
+                        }
+                        if (newStatus.position.modalStateKnown) {
+                            displayUnits = newStatus.position.units
+                            displayUnitsInitialized = true
+                        }
                     }
                 },
 
@@ -208,6 +231,10 @@ fun PendantApp() {
 
                 onStopJogActionAvailable = { action ->
                     stopJogAction = action
+                },
+
+                onJogModeConfigurationAvailable = { action ->
+                    jogModeConfigurationAction = action
                 },
 
                 onCommandBusyChanged = { busy ->
@@ -252,6 +279,7 @@ fun PendantApp() {
                 ) {
                     stopActiveJog()
                     selectedMode = 0
+                    configureSelectedJogMode(0)
                 }
 
                 ModeTab(
@@ -261,6 +289,7 @@ fun PendantApp() {
                 ) {
                     stopActiveJog()
                     selectedMode = 1
+                    configureSelectedJogMode(1)
                 }
 
                 ModeTab(
@@ -270,6 +299,7 @@ fun PendantApp() {
                 ) {
                     stopActiveJog()
                     selectedMode = 2
+                    configureSelectedJogMode(2)
                 }
             }
 
@@ -285,6 +315,7 @@ fun PendantApp() {
                     resolution = mpgResolution,
                     onResolutionChanged = {
                         mpgResolution = it
+                        if (selectedMode == 0) configureSelectedJogMode(0)
                     },
                     axis = mpgAxis,
                     onAxisChanged = {
@@ -312,6 +343,7 @@ fun PendantApp() {
                     speed = displayedFeedRate,
                     onSpeedChanged = {
                         updateDisplayedFeedRate(it)
+                        if (selectedMode == 1) configureSelectedJogMode(1)
                     },
                     holdToRun = holdToRun,
                     onHoldToRunChanged = {
@@ -342,6 +374,7 @@ fun PendantApp() {
                     lastCommand = lastIncrementalCommand,
                     onStepChanged = { axis, value ->
                         axisSteps[axis] = value
+                        if (selectedMode == 2 && axis == "X") configureSelectedJogMode(2)
                     },
                     onCommand = { command ->
                         lastIncrementalCommand = command
@@ -350,6 +383,7 @@ fun PendantApp() {
                     feedRate = displayedFeedRate,
                     onFeedRateChanged = {
                         updateDisplayedFeedRate(it)
+                        if (selectedMode == 2) configureSelectedJogMode(2)
                     },
                     onJogRequest = { axis, distance, feedRate, units ->
                         lastIncrementalCommand =
