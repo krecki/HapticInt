@@ -112,9 +112,12 @@ Setting IDs:
 
 Runtime updates are not saved. The normal `$50`–`$55` settings and their
 existing persistence behavior are unchanged. Speed values must be from 1 to
-10000 mm/min; distance values must be from 0.001 to 1000 mm. An update is
-ignored if a keypad jog is active. The sender should send a setting packet
-before the next jog command and should resend the value after reconnecting.
+10000 mm/min; distance values must be from 0.001 to 1000 mm. Runtime setting
+frames are queued in a small firmware-side FIFO and applied in order. Settings
+may be updated while a jog is active; an already-generated jog is unaffected,
+while subsequent keypad jog commands use the new values. The sender should
+resend values after reconnecting because runtime values are volatile and are
+not saved to NVS.
 
 ---
 
