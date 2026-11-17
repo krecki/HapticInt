@@ -304,7 +304,6 @@ class PendantCommandController(
         if (!validateFeedRate(feedRate, units) || !canSendKeypadJog()) return
 
         continuousJogActive = true
-        jogStopRequested = false
 
         sendKeypadJog(
             axis = normalized[1],
