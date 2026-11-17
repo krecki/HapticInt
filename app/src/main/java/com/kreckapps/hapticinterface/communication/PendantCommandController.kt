@@ -996,7 +996,7 @@ class PendantCommandController(
         requestedAxis = null
         requestedValue = null
         operation = null
-
+        continuousJogActive = false
     }
 
     // ------------------------------------------------
