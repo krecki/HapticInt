@@ -34,8 +34,6 @@ fun MPGScreen(
     axis: String,
     onAxisChanged: (String) -> Unit,
     displayUnits: MachineUnits,
-    feedRate: Float,
-    onFeedRateChanged: (Float) -> Unit,
     onJogRequest: (Char, Double, Double, MachineUnits) -> Unit
 ) {
     val resolutionOptions = if (displayUnits == MachineUnits.MILLIMETERS) {
@@ -44,13 +42,13 @@ fun MPGScreen(
         listOf("0.0005", "0.005", "0.05")
     }
 
-    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
-        2000f
+    // MPG uses a fixed, high step feed rate. Turning the wheel faster
+    // increases the rate of detents rather than changing the step feed.
+    val mpgFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
+        2000.0
     } else {
-        2000f / 25.4f
+        2000.0 / 25.4
     }
-
-    val safeFeedRate = feedRate.coerceIn(1f, maxFeedRate)
 
     LaunchedEffect(displayUnits) {
         if (resolution !in resolutionOptions) {
@@ -106,30 +104,7 @@ fun MPGScreen(
             onSelected = onResolutionChanged
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "Shared Jog Feed Rate",
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            text = "${safeFeedRate.toInt()} $feedUnit",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Slider(
-            value = safeFeedRate,
-            onValueChange = onFeedRateChanged,
-            valueRange = 1f..maxFeedRate
-        )
-
-        Text(
-            text = "Maximum: ${maxFeedRate.toInt()} $feedUnit",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Spacer(modifier = Modifier.height(18.dp))
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -146,7 +121,7 @@ fun MPGScreen(
                     onJogRequest(
                         axis.first(),
                         signedDistance,
-                        safeFeedRate.toDouble(),
+                        mpgFeedRate,
                         displayUnits
                     )
                 }
