@@ -356,16 +356,18 @@ class PendantCommandController(
      */
     fun stopJog() {
         // Jog cancel is valid for Step, Fast, and queued MPG detent moves.
-        // Do not gate it on the UI's continuous-jog pressed state.
+        // Send it whenever connected, even if the latest status report is
+        // stale or temporarily missing the MPG field.
         continuousJogActive = false
-        if (currentStatus.connected && currentStatus.pendantInControl == false) {
-            if (bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
-                onMessageChanged("Jog cancel sent.")
-            } else {
-                onMessageChanged("Could not send jog cancel.")
-            }
+        if (!currentStatus.connected) {
+            onMessageChanged("Cannot send jog cancel: pendant is disconnected.")
+            return
+        }
+
+        if (bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
+            onMessageChanged("Jog cancel sent.")
         } else {
-            onMessageChanged("Cannot send jog cancel: keypad mode is not confirmed.")
+            onMessageChanged("Could not send jog cancel.")
         }
     }
 
