@@ -23,19 +23,30 @@ fun PositionDisplay(
     status: MachineStatus,
     displayMode: CoordinateDisplayMode,
     onDisplayModeChanged: (CoordinateDisplayMode) -> Unit,
+    displayUnits: MachineUnits,
+    onDisplayUnitsChanged: (MachineUnits) -> Unit,
     zeroXEnabled: Boolean,
     onZeroAxis: (Char) -> Unit,
     onSetAxis: (Char, Double) -> Unit
 ) {
     val position = status.position
 
-    val coordinates = if (displayMode == CoordinateDisplayMode.MACHINE) {
+    // Status coordinates arrive in millimeters because $13=0.
+    val coordinatesMm = if (displayMode == CoordinateDisplayMode.MACHINE) {
         listOf(position.machineX, position.machineY, position.machineZ)
     } else {
         listOf(position.workX, position.workY, position.workZ)
     }
 
-    val unitLabel = if (position.units == MachineUnits.INCHES) {
+    val coordinates = coordinatesMm.map { value ->
+        if (displayUnits == MachineUnits.INCHES) {
+            value / 25.4
+        } else {
+            value
+        }
+    }
+
+    val unitLabel = if (displayUnits == MachineUnits.INCHES) {
         "in"
     } else {
         "mm"
@@ -89,6 +100,14 @@ fun PositionDisplay(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        Text(
+            text = "Coordinate Display",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         OptionButtons(
             options = listOf("Machine", "Work"),
             selected = if (
@@ -110,6 +129,34 @@ fun PositionDisplay(
         )
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "Display Units",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        OptionButtons(
+            options = listOf("Inches", "Millimeters"),
+            selected = if (displayUnits == MachineUnits.INCHES) {
+                "Inches"
+            } else {
+                "Millimeters"
+            },
+            onSelected = {
+                onDisplayUnitsChanged(
+                    if (it == "Inches") {
+                        MachineUnits.INCHES
+                    } else {
+                        MachineUnits.MILLIMETERS
+                    }
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -198,7 +245,26 @@ fun PositionDisplay(
 
                     OutlinedButton(
                         onClick = {
-                            onSetAxis(axis, parsedValue!!)
+                            val valueInDisplayUnits = parsedValue!!
+
+                            // Convert the entered value to millimeters.
+                            val valueInMm =
+                                if (displayUnits == MachineUnits.INCHES) {
+                                    valueInDisplayUnits * 25.4
+                                } else {
+                                    valueInDisplayUnits
+                                }
+
+                            // G10 L20 interprets its value using the
+                            // controller's current modal G20/G21 units.
+                            val valueInControllerUnits =
+                                if (position.units == MachineUnits.INCHES) {
+                                    valueInMm / 25.4
+                                } else {
+                                    valueInMm
+                                }
+
+                            onSetAxis(axis, valueInControllerUnits)
                         },
                         enabled = zeroXEnabled && validValue,
                         contentPadding = PaddingValues(

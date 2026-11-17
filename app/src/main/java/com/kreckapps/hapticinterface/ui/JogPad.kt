@@ -192,7 +192,9 @@ fun JogDirectionButton(
                             haptic.performHapticFeedback(
                                 HapticFeedbackType.LongPress
                             )
+
                             latestOnIncrementalJog(label)
+
                         } else if (holdToRun) {
                             latestOnJogChanged(label)
 
@@ -200,9 +202,14 @@ fun JogDirectionButton(
                                 HapticFeedbackType.LongPress
                             )
 
-                            tryAwaitRelease()
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                // Always request a stop when the press ends
+                                // or its pointer interaction is cancelled.
+                                latestOnJogChanged(null)
+                            }
 
-                            latestOnJogChanged(null)
                         } else {
                             haptic.performHapticFeedback(
                                 HapticFeedbackType.LongPress

@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.Canvas
@@ -7,20 +6,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kreckapps.hapticinterface.model.MachineUnits
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -34,8 +32,48 @@ fun MPGScreen(
     resolution: String,
     onResolutionChanged: (String) -> Unit,
     axis: String,
-    onAxisChanged: (String) -> Unit
+    onAxisChanged: (String) -> Unit,
+    displayUnits: MachineUnits,
+    feedRate: Float,
+    onFeedRateChanged: (Float) -> Unit,
+    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit
 ) {
+    val resolutionOptions = if (displayUnits == MachineUnits.MILLIMETERS) {
+        listOf("0.01", "0.1", "1.0")
+    } else {
+        listOf("0.0005", "0.005", "0.05")
+    }
+
+    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
+        2000f
+    } else {
+        2000f / 25.4f
+    }
+
+    val safeFeedRate = feedRate.coerceIn(1f, maxFeedRate)
+
+    LaunchedEffect(displayUnits) {
+        if (resolution !in resolutionOptions) {
+            onResolutionChanged(resolutionOptions.first())
+        }
+    }
+
+    val displayedResolution =
+        resolution.takeIf { it in resolutionOptions }
+            ?: resolutionOptions.first()
+
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
+        "mm"
+    } else {
+        "in"
+    }
+
+    val feedUnit = if (displayUnits == MachineUnits.MILLIMETERS) {
+        "mm/min"
+    } else {
+        "in/min"
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -58,14 +96,39 @@ fun MPGScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Distance per detent",
+            text = "Distance per detent ($unitLabel)",
             fontWeight = FontWeight.SemiBold
         )
 
         OptionButtons(
-            options = listOf("0.01", "0.001", "0.0001"),
-            selected = resolution,
+            options = resolutionOptions,
+            selected = displayedResolution,
             onSelected = onResolutionChanged
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Shared Jog Feed Rate",
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Text(
+            text = "${safeFeedRate.toInt()} $feedUnit",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Slider(
+            value = safeFeedRate,
+            onValueChange = onFeedRateChanged,
+            valueRange = 1f..maxFeedRate
+        )
+
+        Text(
+            text = "Maximum: ${maxFeedRate.toInt()} $feedUnit",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -73,7 +136,21 @@ fun MPGScreen(
         RotaryWheel(
             position = position,
             pulsesPerRev = pulsesPerRev,
-            onPositionChanged = onPositionChanged
+            onPositionChanged = onPositionChanged,
+            onDetent = { direction ->
+                val distance = displayedResolution.toDoubleOrNull()
+
+                if (distance != null && distance > 0.0) {
+                    val signedDistance = distance * direction
+
+                    onJogRequest(
+                        axis.first(),
+                        signedDistance,
+                        safeFeedRate.toDouble(),
+                        displayUnits
+                    )
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -90,7 +167,7 @@ fun MPGScreen(
         )
 
         Text(
-            text = "Resolution: $resolution in / detent",
+            text = "Resolution: $displayedResolution $unitLabel / detent",
             fontSize = 14.sp
         )
 
@@ -114,16 +191,21 @@ fun MPGScreen(
 fun RotaryWheel(
     position: Int,
     pulsesPerRev: Int,
-    onPositionChanged: (Int) -> Unit
+    onPositionChanged: (Int) -> Unit,
+    onDetent: (Int) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
 
     val latestPosition by rememberUpdatedState(position)
-    val latestCallback by rememberUpdatedState(onPositionChanged)
+    val latestPositionCallback by rememberUpdatedState(onPositionChanged)
+    val latestDetentCallback by rememberUpdatedState(onDetent)
 
-    var accumulatedAngle by remember { mutableFloatStateOf(0f) }
+    var accumulatedAngle by remember {
+        mutableFloatStateOf(0f)
+    }
 
-    val detentAngle = (2f * PI.toFloat()) / pulsesPerRev.coerceAtLeast(1)
+    val safePulsesPerRev = pulsesPerRev.coerceAtLeast(1)
+    val detentAngle = (2f * PI.toFloat()) / safePulsesPerRev
 
     Box(
         modifier = Modifier
@@ -135,8 +217,14 @@ fun RotaryWheel(
                 color = MaterialTheme.colorScheme.primary,
                 shape = CircleShape
             )
-            .pointerInput(pulsesPerRev) {
-                detectDragGestures { change, _ ->
+            .pointerInput(safePulsesPerRev) {
+                var dragPosition = latestPosition
+
+                detectDragGestures(
+                    onDragStart = {
+                        dragPosition = latestPosition
+                    }
+                ) { change, _ ->
                     val center = Offset(
                         size.width / 2f,
                         size.height / 2f
@@ -150,22 +238,35 @@ fun RotaryWheel(
 
                     var delta = currentAngle - previousAngle
 
-                    if (delta > PI) delta -= (2.0 * PI).toFloat()
-                    if (delta < -PI) delta += (2.0 * PI).toFloat()
+                    if (delta > PI) {
+                        delta -= (2.0 * PI).toFloat()
+                    }
+
+                    if (delta < -PI) {
+                        delta += (2.0 * PI).toFloat()
+                    }
 
                     accumulatedAngle += delta
 
                     while (accumulatedAngle >= detentAngle) {
-                        latestCallback(latestPosition + 1)
+                        dragPosition += 1
+                        latestPositionCallback(dragPosition)
+                        latestDetentCallback(1)
+
                         accumulatedAngle -= detentAngle
+
                         haptic.performHapticFeedback(
                             HapticFeedbackType.LongPress
                         )
                     }
 
                     while (accumulatedAngle <= -detentAngle) {
-                        latestCallback(latestPosition - 1)
+                        dragPosition -= 1
+                        latestPositionCallback(dragPosition)
+                        latestDetentCallback(-1)
+
                         accumulatedAngle += detentAngle
+
                         haptic.performHapticFeedback(
                             HapticFeedbackType.LongPress
                         )
@@ -179,13 +280,19 @@ fun RotaryWheel(
         val tickColor = MaterialTheme.colorScheme.onSurface
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = Offset(size.width / 2f, size.height / 2f)
+            val center = Offset(
+                size.width / 2f,
+                size.height / 2f
+            )
+
             val radius = size.minDimension * 0.42f
 
-            for (i in 0 until pulsesPerRev) {
-                val angle = (2.0 * PI * i / pulsesPerRev) - PI / 2.0
+            for (i in 0 until safePulsesPerRev) {
+                val angle =
+                    (2.0 * PI * i / safePulsesPerRev) - PI / 2.0
 
                 val outerRadius = radius
+
                 val innerRadius = if (i % 5 == 0) {
                     radius * 0.78f
                 } else {

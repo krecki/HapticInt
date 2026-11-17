@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.model
 
 enum class CoordinateDisplayMode {
@@ -21,5 +20,9 @@ data class MachinePosition(
     val workZ: Double = 0.0,
 
     val activeWcs: String = "G54",
-    val units: MachineUnits = MachineUnits.INCHES
+
+    val units: MachineUnits = MachineUnits.INCHES,
+
+    // True only after GRBL has reported G20 or G21.
+    val modalStateKnown: Boolean = false
 )

@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.communication
 
 import com.kreckapps.hapticinterface.model.MachinePosition
@@ -7,33 +6,33 @@ import com.kreckapps.hapticinterface.model.MachineUnits
 
 object GrblStatusParser {
 
-    /**
-     * Parses a grblHAL real-time status report.
-     *
-     * Example:
-     * <Idle|MPos:12.345,6.789,2.500|WCO:11.095,4.289,1.750>
-     *
-     * Returns null if the message is not a valid status report.
-     */
+    private val validWcs = setOf(
+        "G54", "G55", "G56",
+        "G57", "G58", "G59"
+    )
+
     fun parseStatusReport(
         report: String,
         previous: MachineStatus
     ): MachineStatus? {
 
-        val cleaned = report.trim()
+        val trimmed = report.trim()
 
-        if (!cleaned.startsWith("<") || !cleaned.endsWith(">")) {
+        if (!trimmed.startsWith("<") || !trimmed.endsWith(">")) {
             return null
         }
 
-        val contents = cleaned.removePrefix("<").removeSuffix(">")
+        val contents = trimmed
+            .removePrefix("<")
+            .removeSuffix(">")
+
         val fields = contents.split("|")
 
         if (fields.isEmpty()) return null
 
         val machineState = fields[0].trim()
 
-        if (machineState.isEmpty()) return null
+        if (machineState.isBlank()) return null
 
         val values = mutableMapOf<String, String>()
 
@@ -43,15 +42,16 @@ object GrblStatusParser {
             if (separator > 0) {
                 val key = field.substring(0, separator).trim()
                 val value = field.substring(separator + 1).trim()
+
                 values[key] = value
             }
         }
 
-        val machineCoordinates = parseCoordinates(values["MPos"])
-        val workCoordinates = parseCoordinates(values["WPos"])
-        val workCoordinateOffset = parseCoordinates(values["WCO"])
-
         val oldPosition = previous.position
+
+        val machinePosition = parseCoordinates(values["MPos"])
+        val workPosition = parseCoordinates(values["WPos"])
+        val workCoordinateOffset = parseCoordinates(values["WCO"])
 
         var machineX = oldPosition.machineX
         var machineY = oldPosition.machineY
@@ -61,63 +61,56 @@ object GrblStatusParser {
         var workY = oldPosition.workY
         var workZ = oldPosition.workZ
 
-        // Update machine coordinates when MPos is available.
-        if (machineCoordinates != null) {
-            machineX = machineCoordinates[0]
-            machineY = machineCoordinates[1]
-            machineZ = machineCoordinates[2]
+        if (machinePosition != null) {
+            machineX = machinePosition[0]
+            machineY = machinePosition[1]
+            machineZ = machinePosition[2]
         }
 
-        // Update work coordinates directly when WPos is available.
-        if (workCoordinates != null) {
-            workX = workCoordinates[0]
-            workY = workCoordinates[1]
-            workZ = workCoordinates[2]
+        if (workPosition != null) {
+            workX = workPosition[0]
+            workY = workPosition[1]
+            workZ = workPosition[2]
         }
 
-        // If WPos wasn't reported, calculate it from MPos and WCO.
-        if (workCoordinates == null &&
-            machineCoordinates != null &&
-            workCoordinateOffset != null
-        ) {
-            workX = machineX - workCoordinateOffset[0]
-            workY = machineY - workCoordinateOffset[1]
-            workZ = machineZ - workCoordinateOffset[2]
-        }
+        if (workCoordinateOffset != null) {
 
-        // If MPos wasn't reported, calculate it from WPos and WCO.
-        if (machineCoordinates == null &&
-            workCoordinates != null &&
-            workCoordinateOffset != null
-        ) {
-            machineX = workX + workCoordinateOffset[0]
-            machineY = workY + workCoordinateOffset[1]
-            machineZ = workZ + workCoordinateOffset[2]
-        }
+            if (machinePosition != null && workPosition == null) {
+                workX = machineX - workCoordinateOffset[0]
+                workY = machineY - workCoordinateOffset[1]
+                workZ = machineZ - workCoordinateOffset[2]
+            }
 
+            if (workPosition != null && machinePosition == null) {
+                machineX = workX + workCoordinateOffset[0]
+                machineY = workY + workCoordinateOffset[1]
+                machineZ = workZ + workCoordinateOffset[2]
+            }
+        }
 
         val reportedWcs = values["WCS"]
 
-        val activeWcs = when (reportedWcs) {
-            "G54", "G55", "G56", "G57", "G58", "G59" ->
-                reportedWcs
-
-            else -> oldPosition.activeWcs
+        val activeWcs = if (reportedWcs in validWcs) {
+            reportedWcs!!
+        } else {
+            oldPosition.activeWcs
         }
 
         val newPosition = oldPosition.copy(
             machineX = machineX,
             machineY = machineY,
             machineZ = machineZ,
+
             workX = workX,
             workY = workY,
             workZ = workZ,
+
             activeWcs = activeWcs
         )
 
         val pendantInControl = when (values["MPG"]) {
-            "0" -> false
             "1" -> true
+            "0" -> false
             else -> previous.pendantInControl
         }
 
@@ -126,64 +119,65 @@ object GrblStatusParser {
             position = newPosition,
             pendantInControl = pendantInControl
         )
-
     }
 
-    /**
-     * Parses the response to the grblHAL $G command.
-     *
-     * Example:
-     * [GC:G0 G54 G17 G21 G90 G94 M5 M9 T0 F0 S0]
-     */
     fun parseModalReport(
         report: String,
         previous: MachineStatus
     ): MachineStatus {
 
-        val cleaned = report.trim()
+        val trimmed = report.trim()
 
-        if (!cleaned.startsWith("[GC:") || !cleaned.endsWith("]")) {
+        if (!trimmed.startsWith("[GC:") || !trimmed.endsWith("]")) {
             return previous
         }
 
-        val contents = cleaned
+        val contents = trimmed
             .removePrefix("[GC:")
             .removeSuffix("]")
 
-        val words = contents.split(Regex("\\s+"))
+        val words = contents
+            .trim()
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
 
         var activeWcs = previous.position.activeWcs
         var units = previous.position.units
+        var unitsReported = false
 
         for (word in words) {
             when (word) {
-                "G54", "G55", "G56", "G57", "G58", "G59" -> {
+                in validWcs -> {
                     activeWcs = word
                 }
 
                 "G20" -> {
                     units = MachineUnits.INCHES
+                    unitsReported = true
                 }
 
                 "G21" -> {
                     units = MachineUnits.MILLIMETERS
+                    unitsReported = true
                 }
             }
         }
 
+        val newPosition = previous.position.copy(
+            activeWcs = activeWcs,
+            units = units,
+            modalStateKnown =
+            previous.position.modalStateKnown || unitsReported
+        )
+
         return previous.copy(
-            position = previous.position.copy(
-                activeWcs = activeWcs,
-                units = units
-            )
+            position = newPosition
         )
     }
 
-    /**
-     * Converts a coordinate string such as
-     * "12.345,6.789,2.500" into three Double values.
-     */
-    private fun parseCoordinates(value: String?): List<Double>? {
+    private fun parseCoordinates(
+        value: String?
+    ): DoubleArray? {
 
         if (value == null) return null
 
@@ -192,9 +186,17 @@ object GrblStatusParser {
         if (coordinates.size != 3) return null
 
         val parsed = coordinates.map {
-            it.trim().toDoubleOrNull() ?: return null
+            it.trim().toDoubleOrNull()
         }
 
-        return parsed
+        if (parsed.any { it == null || !it.isFinite() }) {
+            return null
+        }
+
+        return doubleArrayOf(
+            parsed[0]!!,
+            parsed[1]!!,
+            parsed[2]!!
+        )
     }
 }

@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
@@ -15,6 +14,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
+import com.kreckapps.hapticinterface.model.MachineUnits
+
+private const val MM_PER_INCH = 25.4f
+private const val MAX_FEED_MM_MIN = 2000f
 
 @Composable
 fun PendantApp() {
@@ -27,8 +30,12 @@ fun PendantApp() {
     var mpgResolution by remember { mutableStateOf("0.001") }
     var mpgAxis by remember { mutableStateOf("X") }
 
+    // One shared feed rate, always stored internally in mm/min.
+    var jogFeedRateMmMin by remember {
+        mutableFloatStateOf(50f)
+    }
+
     // Continuous jogging settings
-    var jogSpeed by remember { mutableFloatStateOf(50f) }
     var holdToRun by remember { mutableStateOf(true) }
     var activeJog by remember { mutableStateOf<String?>(null) }
 
@@ -37,12 +44,21 @@ fun PendantApp() {
         mutableStateOf(CoordinateDisplayMode.WORK)
     }
 
+    // Display units are initialized from the first valid modal report.
+    var displayUnits by remember {
+        mutableStateOf(MachineUnits.INCHES)
+    }
+
+    var displayUnitsInitialized by remember {
+        mutableStateOf(false)
+    }
+
     // Live machine information
     var machineStatus by remember {
         mutableStateOf(MachineStatus())
     }
 
-    // Zero X action supplied by the connection panel
+    // Actions supplied by the connection panel
     var zeroAxisAction by remember {
         mutableStateOf<((Char) -> Unit)?>(null)
     }
@@ -51,11 +67,27 @@ fun PendantApp() {
         mutableStateOf<((Char, Double) -> Unit)?>(null)
     }
 
+    var incrementalJogAction by remember {
+        mutableStateOf<
+                ((Char, Double, Double, MachineUnits) -> Unit)?
+                >(null)
+    }
+
+    var continuousJogStartAction by remember {
+        mutableStateOf<
+                ((String, Double, MachineUnits) -> Unit)?
+                >(null)
+    }
+
+    var stopJogAction by remember {
+        mutableStateOf<(() -> Unit)?>(null)
+    }
+
     var coordinateCommandBusy by remember {
         mutableStateOf(false)
     }
 
-    // Incremental jogging settings
+    // Incremental jogging step sizes remain independent per axis.
     val axisSteps = remember {
         mutableStateMapOf(
             "X" to "0.01",
@@ -64,16 +96,47 @@ fun PendantApp() {
         )
     }
 
-    val axisSpeeds = remember {
-        mutableStateMapOf(
-            "X" to 50f,
-            "Y" to 50f,
-            "Z" to 50f
-        )
-    }
-
     var lastIncrementalCommand by remember {
         mutableStateOf("No jog command yet")
+    }
+
+    // Convert the shared internal feed rate to the selected display units.
+    val displayedFeedRate = if (
+        displayUnits == MachineUnits.MILLIMETERS
+    ) {
+        jogFeedRateMmMin
+    } else {
+        jogFeedRateMmMin / MM_PER_INCH
+    }
+
+    val maximumDisplayedFeedRate = if (
+        displayUnits == MachineUnits.MILLIMETERS
+    ) {
+        MAX_FEED_MM_MIN
+    } else {
+        MAX_FEED_MM_MIN / MM_PER_INCH
+    }
+
+    fun updateDisplayedFeedRate(value: Float) {
+        val safeValue = value.coerceIn(
+            1f,
+            maximumDisplayedFeedRate
+        )
+
+        jogFeedRateMmMin = if (
+            displayUnits == MachineUnits.MILLIMETERS
+        ) {
+            safeValue
+        } else {
+            safeValue * MM_PER_INCH
+        }
+    }
+
+    fun stopActiveJog() {
+        if (activeJog != null) {
+            stopJogAction?.invoke()
+            activeJog = null
+        }
     }
 
     Column(
@@ -96,8 +159,8 @@ fun PendantApp() {
 
             TextButton(
                 onClick = {
+                    stopActiveJog()
                     settingsOpen = !settingsOpen
-                    activeJog = null
                 }
             ) {
                 Text(if (settingsOpen) "Back" else "Settings")
@@ -117,13 +180,36 @@ fun PendantApp() {
             PendantConnectionPanel(
                 onMachineStatusChanged = { newStatus ->
                     machineStatus = newStatus
+
+                    if (
+                        !displayUnitsInitialized &&
+                        newStatus.position.modalStateKnown
+                    ) {
+                        displayUnits = newStatus.position.units
+                        displayUnitsInitialized = true
+                    }
                 },
+
                 onZeroAxisActionAvailable = { action ->
                     zeroAxisAction = action
                 },
+
                 onSetAxisActionAvailable = { action ->
                     setAxisAction = action
                 },
+
+                onIncrementalJogActionAvailable = { action ->
+                    incrementalJogAction = action
+                },
+
+                onContinuousJogStartActionAvailable = { action ->
+                    continuousJogStartAction = action
+                },
+
+                onStopJogActionAvailable = { action ->
+                    stopJogAction = action
+                },
+
                 onCommandBusyChanged = { busy ->
                     coordinateCommandBusy = busy
                 }
@@ -134,6 +220,11 @@ fun PendantApp() {
                 displayMode = coordinateDisplayMode,
                 onDisplayModeChanged = {
                     coordinateDisplayMode = it
+                },
+                displayUnits = displayUnits,
+                onDisplayUnitsChanged = {
+                    displayUnits = it
+                    displayUnitsInitialized = true
                 },
                 zeroXEnabled =
                 machineStatus.connected &&
@@ -159,8 +250,8 @@ fun PendantApp() {
                     selected = selectedMode == 0,
                     modifier = Modifier.weight(1f)
                 ) {
+                    stopActiveJog()
                     selectedMode = 0
-                    activeJog = null
                 }
 
                 ModeTab(
@@ -168,8 +259,8 @@ fun PendantApp() {
                     selected = selectedMode == 1,
                     modifier = Modifier.weight(1f)
                 ) {
+                    stopActiveJog()
                     selectedMode = 1
-                    activeJog = null
                 }
 
                 ModeTab(
@@ -177,8 +268,8 @@ fun PendantApp() {
                     selected = selectedMode == 2,
                     modifier = Modifier.weight(1f)
                 ) {
+                    stopActiveJog()
                     selectedMode = 2
-                    activeJog = null
                 }
             }
 
@@ -198,6 +289,22 @@ fun PendantApp() {
                     axis = mpgAxis,
                     onAxisChanged = {
                         mpgAxis = it
+                    },
+                    displayUnits = displayUnits,
+                    feedRate = displayedFeedRate,
+                    onFeedRateChanged = {
+                        updateDisplayedFeedRate(it)
+                    },
+                    onJogRequest = { axis, distance, feedRate, units ->
+                        lastIncrementalCommand =
+                            "MPG $axis detent: $distance at $feedRate ($units)"
+
+                        incrementalJogAction?.invoke(
+                            axis,
+                            distance,
+                            feedRate,
+                            units
+                        )
                     }
                 )
 
@@ -206,29 +313,58 @@ fun PendantApp() {
                     onJogChanged = {
                         activeJog = it
                     },
-                    speed = jogSpeed,
+                    speed = displayedFeedRate,
                     onSpeedChanged = {
-                        jogSpeed = it
+                        updateDisplayedFeedRate(it)
                     },
                     holdToRun = holdToRun,
                     onHoldToRunChanged = {
                         holdToRun = it
                         activeJog = null
+                    },
+                    displayUnits = displayUnits,
+                    onJogRequest = { direction, feedRate, units ->
+                        lastIncrementalCommand =
+                            "Continuous jog requested: $direction at $feedRate ($units)"
+
+                        continuousJogStartAction?.invoke(
+                            direction,
+                            feedRate,
+                            units
+                        )
+                    },
+                    onStopJog = {
+                        lastIncrementalCommand =
+                            "Continuous jog stop requested"
+
+                        stopJogAction?.invoke()
                     }
                 )
 
                 2 -> IncrementalJogScreen(
                     axisSteps = axisSteps,
-                    axisSpeeds = axisSpeeds,
                     lastCommand = lastIncrementalCommand,
                     onStepChanged = { axis, value ->
                         axisSteps[axis] = value
                     },
-                    onSpeedChanged = { axis, value ->
-                        axisSpeeds[axis] = value
-                    },
                     onCommand = { command ->
                         lastIncrementalCommand = command
+                    },
+                    displayUnits = displayUnits,
+                    feedRate = displayedFeedRate,
+                    onFeedRateChanged = {
+                        updateDisplayedFeedRate(it)
+                    },
+                    onJogRequest = { axis, distance, feedRate, units ->
+                        lastIncrementalCommand =
+                            "Requested $axis move: $distance at $feedRate ($units)"
+
+                        incrementalJogAction?.invoke(
+                            axis,
+                            distance,
+                            feedRate,
+                            units
+                        )
                     }
                 )
             }

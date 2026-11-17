@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
@@ -11,20 +10,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kreckapps.hapticinterface.model.MachineUnits
+
+private const val MAX_FEED_MM_MIN = 2000f
+private const val MM_PER_INCH = 25.4f
 
 @Composable
 fun IncrementalJogScreen(
     axisSteps: Map<String, String>,
-    axisSpeeds: Map<String, Float>,
     lastCommand: String,
     onStepChanged: (String, String) -> Unit,
-    onSpeedChanged: (String, Float) -> Unit,
-    onCommand: (String) -> Unit
+    onCommand: (String) -> Unit,
+    displayUnits: MachineUnits,
+    feedRate: Float,
+    onFeedRateChanged: (Float) -> Unit,
+    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit
 ) {
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
+        "mm"
+    } else {
+        "in"
+    }
+
+    val feedUnit = if (displayUnits == MachineUnits.MILLIMETERS) {
+        "mm/min"
+    } else {
+        "in/min"
+    }
+
+    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
+        MAX_FEED_MM_MIN
+    } else {
+        MAX_FEED_MM_MIN / MM_PER_INCH
+    }
+
+    val safeFeedRate = feedRate.coerceIn(1f, maxFeedRate)
+
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(),
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         SectionTitle("Incremental Jogging")
@@ -32,7 +55,7 @@ fun IncrementalJogScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Set the step size and speed for each axis.",
+            text = "Set the step size for each axis.",
             fontSize = 13.sp
         )
 
@@ -42,35 +65,72 @@ fun IncrementalJogScreen(
             AxisSettingsRow(
                 axis = axis,
                 step = axisSteps[axis] ?: "0.01",
-                speed = axisSpeeds[axis] ?: 50f,
+                unitLabel = unitLabel,
                 onStepChanged = {
                     onStepChanged(axis, it)
-                },
-                onSpeedChanged = {
-                    onSpeedChanged(axis, it)
                 }
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        Text(
+            text = "Shared Jog Feed Rate",
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Text(
+            text = "${safeFeedRate.toInt()} $feedUnit",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Slider(
+            value = safeFeedRate,
+            onValueChange = onFeedRateChanged,
+            valueRange = 1f..maxFeedRate
+        )
+
+        Text(
+            text = "Maximum: ${maxFeedRate.toInt()} $feedUnit",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         JogPad(
             incremental = true,
             onIncrementalJog = { direction ->
-                val axis = direction.last().toString()
-                val step = axisSteps[axis] ?: "0.01"
-                val speed = axisSpeeds[axis] ?: 50f
-
+                val axis = direction.last()
+                val step = axisSteps[axis.toString()] ?: "0.01"
                 val stepValue = step.toDoubleOrNull()
 
-                if (stepValue != null && stepValue > 0.0) {
+                if (
+                    stepValue != null &&
+                    stepValue.isFinite() &&
+                    stepValue > 0.0
+                ) {
+                    val signedDistance =
+                        if (direction.startsWith("-")) {
+                            -stepValue
+                        } else {
+                            stepValue
+                        }
+
                     onCommand(
-                        "$direction: Move $step in at ${speed.toInt()}% speed"
+                        "Jog $direction: $step $unitLabel at " +
+                                "${safeFeedRate.toInt()} $feedUnit"
+                    )
+
+                    onJogRequest(
+                        axis,
+                        signedDistance,
+                        safeFeedRate.toDouble(),
+                        displayUnits
                     )
                 } else {
-                    onCommand(
-                        "Invalid step size for axis $axis"
-                    )
+                    onCommand("Invalid step size for axis $axis")
                 }
             },
             onStop = {
@@ -97,9 +157,8 @@ fun IncrementalJogScreen(
 fun AxisSettingsRow(
     axis: String,
     step: String,
-    speed: Float,
-    onStepChanged: (String) -> Unit,
-    onSpeedChanged: (Float) -> Unit
+    unitLabel: String,
+    onStepChanged: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -123,34 +182,13 @@ fun AxisSettingsRow(
                     }
                 },
                 modifier = Modifier.weight(1f),
-                label = { Text("Step size (in)") },
+                label = {
+                    Text("Step size ($unitLabel)")
+                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal
                 )
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Speed",
-                modifier = Modifier.width(65.dp),
-                fontSize = 12.sp
-            )
-
-            Slider(
-                value = speed,
-                onValueChange = onSpeedChanged,
-                valueRange = 1f..100f,
-                modifier = Modifier.weight(1f)
-            )
-
-            Text(
-                text = "${speed.toInt()}%",
-                modifier = Modifier.width(42.dp),
-                fontSize = 12.sp
             )
         }
     }

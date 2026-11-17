@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
@@ -9,6 +8,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kreckapps.hapticinterface.model.MachineUnits
+
+private const val MAX_CONTINUOUS_FEED_MM_MIN = 2000f
+private const val MM_PER_INCH = 25.4f
 
 @Composable
 fun ContinuousJogScreen(
@@ -17,8 +20,25 @@ fun ContinuousJogScreen(
     speed: Float,
     onSpeedChanged: (Float) -> Unit,
     holdToRun: Boolean,
-    onHoldToRunChanged: (Boolean) -> Unit
+    onHoldToRunChanged: (Boolean) -> Unit,
+    displayUnits: MachineUnits,
+    onJogRequest: (String, Double, MachineUnits) -> Unit,
+    onStopJog: () -> Unit
 ) {
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
+        "mm/min"
+    } else {
+        "in/min"
+    }
+
+    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
+        MAX_CONTINUOUS_FEED_MM_MIN
+    } else {
+        MAX_CONTINUOUS_FEED_MM_MIN / MM_PER_INCH
+    }
+
+    val safeSpeed = speed.coerceIn(1f, maxFeedRate)
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -42,23 +62,57 @@ fun ContinuousJogScreen(
             options = listOf("Hold to Run", "Tap to Toggle"),
             selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
             onSelected = {
+                if (activeJog != null) {
+                    onStopJog()
+                    onJogChanged(null)
+                }
+
                 onHoldToRunChanged(it == "Hold to Run")
             }
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        SpeedControl(
-            label = "Jog Speed",
-            speed = speed,
-            onSpeedChanged = onSpeedChanged
+        Text(
+            text = "Shared Jog Feed Rate",
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Text(
+            text = "${safeSpeed.toInt()} $unitLabel",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Slider(
+            value = safeSpeed,
+            onValueChange = onSpeedChanged,
+            valueRange = 1f..maxFeedRate
+        )
+
+        Text(
+            text = "Maximum: ${maxFeedRate.toInt()} $unitLabel",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(18.dp))
 
         JogPad(
             activeJog = activeJog,
-            onJogChanged = onJogChanged,
+            onJogChanged = { direction ->
+                onJogChanged(direction)
+
+                if (direction == null) {
+                    onStopJog()
+                } else {
+                    onJogRequest(
+                        direction,
+                        safeSpeed.toDouble(),
+                        displayUnits
+                    )
+                }
+            },
             holdToRun = holdToRun
         )
 
@@ -79,7 +133,7 @@ fun ContinuousJogScreen(
         )
 
         Text(
-            text = "Speed: ${speed.toInt()}%",
+            text = "Feed rate: ${safeSpeed.toInt()} $unitLabel",
             fontSize = 14.sp
         )
     }

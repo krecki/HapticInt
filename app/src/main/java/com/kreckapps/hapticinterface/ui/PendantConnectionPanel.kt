@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.communication.PendantBluetoothManager
 import com.kreckapps.hapticinterface.communication.PendantCommandController
 import com.kreckapps.hapticinterface.model.MachineStatus
+import com.kreckapps.hapticinterface.model.MachineUnits
 import kotlinx.coroutines.delay
 
 @Composable
@@ -25,6 +26,11 @@ fun PendantConnectionPanel(
     onMachineStatusChanged: (MachineStatus) -> Unit,
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
+    onIncrementalJogActionAvailable:
+        (((Char, Double, Double, MachineUnits) -> Unit)?) -> Unit,
+    onContinuousJogStartActionAvailable:
+        (((String, Double, MachineUnits) -> Unit)?) -> Unit,
+    onStopJogActionAvailable: ((() -> Unit)?) -> Unit,
     onCommandBusyChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -32,6 +38,12 @@ fun PendantConnectionPanel(
     val latestStatusCallback = rememberUpdatedState(onMachineStatusChanged)
     val latestZeroAxisCallback = rememberUpdatedState(onZeroAxisActionAvailable)
     val latestSetAxisCallback = rememberUpdatedState(onSetAxisActionAvailable)
+    val latestIncrementalJogCallback =
+        rememberUpdatedState(onIncrementalJogActionAvailable)
+    val latestContinuousJogCallback =
+        rememberUpdatedState(onContinuousJogStartActionAvailable)
+    val latestStopJogCallback =
+        rememberUpdatedState(onStopJogActionAvailable)
     val latestBusyCallback = rememberUpdatedState(onCommandBusyChanged)
 
     val bluetoothManager = remember {
@@ -55,6 +67,8 @@ fun PendantConnectionPanel(
     var commandBusy by remember {
         mutableStateOf(false)
     }
+    
+    val latestCommandBusy = rememberUpdatedState(commandBusy)
 
     val commandController = remember(bluetoothManager) {
         PendantCommandController(
@@ -75,7 +89,7 @@ fun PendantConnectionPanel(
         )
     }
 
-    // Publish the axis-zeroing action to PendantApp.
+    // Publish the existing coordinate actions.
     val zeroAxisAction = remember(commandController) {
         { axis: Char ->
             commandController.zeroWorkAxis(axis)
@@ -88,9 +102,42 @@ fun PendantConnectionPanel(
         }
     }
 
+    // Publish the incremental jog action.
+    val incrementalJogAction = remember(commandController) {
+        { axis: Char, distance: Double, feedRate: Double, units: MachineUnits ->
+            commandController.jogIncrement(
+                axis,
+                distance,
+                feedRate,
+                units
+            )
+        }
+    }
+
+    // Publish the continuous jog start action.
+    val continuousJogStartAction = remember(commandController) {
+        { direction: String, feedRate: Double, units: MachineUnits ->
+            commandController.startContinuousJog(
+                direction,
+                feedRate,
+                units
+            )
+        }
+    }
+
+    // Publish the jog stop action.
+    val stopJogAction = remember(commandController) {
+        {
+            commandController.stopJog()
+        }
+    }
+
     SideEffect {
         latestZeroAxisCallback.value(zeroAxisAction)
         latestSetAxisCallback.value(setAxisAction)
+        latestIncrementalJogCallback.value(incrementalJogAction)
+        latestContinuousJogCallback.value(continuousJogStartAction)
+        latestStopJogCallback.value(stopJogAction)
         latestBusyCallback.value(commandBusy)
     }
 
@@ -147,6 +194,9 @@ fun PendantConnectionPanel(
         onDispose {
             latestZeroAxisCallback.value(null)
             latestSetAxisCallback.value(null)
+            latestIncrementalJogCallback.value(null)
+            latestContinuousJogCallback.value(null)
+            latestStopJogCallback.value(null)
             latestBusyCallback.value(false)
 
             commandController.releaseResources()
@@ -166,7 +216,7 @@ fun PendantConnectionPanel(
             while (true) {
                 bluetoothManager.sendRealtime('?')
 
-                if (pollCount % 10 == 0 && !commandBusy) {
+                if (pollCount % 10 == 0 && !latestCommandBusy.value) {
                     bluetoothManager.sendCommand("\$G")
                 }
 
