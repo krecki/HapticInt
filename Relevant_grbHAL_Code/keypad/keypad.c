@@ -70,12 +70,11 @@ static on_mpg_registered_ptr on_mpg_registered;
 #define RUNTIME_SETTING_PACKET_DATA 7
 
 static uint8_t runtime_setting_packet[RUNTIME_SETTING_PACKET_DATA];
+static uint8_t runtime_setting_payload[6];
 static uint_fast8_t runtime_setting_packet_index = 0;
 static volatile bool runtime_setting_pending = false;
-static uint8_t runtime_setting_id;
-static float runtime_setting_value;
 
-static uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
+static ISR_CODE uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
 {
     uint8_t crc = 0;
 
@@ -90,25 +89,27 @@ static uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
 
 static bool runtime_setting_valid (uint8_t id, float value)
 {
-    if(!(value >= 0.001f && value <= 100000.0f))
-        return false;
-
     if(id >= 1 && id <= 3) // jog speeds, mm/min
-        return value >= 1.0f;
+        return value >= 1.0f && value <= 100000.0f;
 
-    return id >= 4 && id <= 6; // jog distances, mm
+    if(id >= 4 && id <= 6) // jog distances, mm
+        return value >= 0.001f && value <= 1000.0f;
+
+    return false;
 }
 
 FLASHMEM static void keypad_apply_runtime_setting (void *data)
 {
-    uint8_t id = runtime_setting_id;
-    float value = runtime_setting_value;
+    uint8_t packet[6];
+    float value;
 
+    memcpy(packet, runtime_setting_payload, sizeof(packet));
     runtime_setting_pending = false;
+    memcpy(&value, &packet[2], sizeof(float));
 
     // Do not change jog parameters while a keypad jog is active.
-    if(!jogging && runtime_setting_valid(id, value)) {
-        switch(id) {
+    if(!jogging && packet[0] == RUNTIME_SETTING_COMMAND && runtime_setting_valid(packet[1], value)) {
+        switch(packet[1]) {
             case 1: jog.step_speed = value; break;
             case 2: jog.slow_speed = value; break;
             case 3: jog.fast_speed = value; break;
@@ -151,15 +152,11 @@ static ISR_CODE bool runtime_setting_receive (uint8_t c)
             runtime_setting_crc8(runtime_setting_packet, 6) == runtime_setting_packet[6] &&
             !runtime_setting_pending) {
 
-            float value;
-            memcpy(&value, &runtime_setting_packet[2], sizeof(float));
+            for(uint_fast8_t i = 0; i < sizeof(runtime_setting_payload); i++)
+                runtime_setting_payload[i] = runtime_setting_packet[i];
 
-            if(runtime_setting_valid(runtime_setting_packet[1], value) && !jogging) {
-                runtime_setting_id = runtime_setting_packet[1];
-                runtime_setting_value = value;
-                runtime_setting_pending = true;
-                task_add_immediate(keypad_apply_runtime_setting, NULL);
-            }
+            runtime_setting_pending = true;
+            task_add_immediate(keypad_apply_runtime_setting, NULL);
         }
     }
 
