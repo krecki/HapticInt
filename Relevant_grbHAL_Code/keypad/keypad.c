@@ -629,10 +629,11 @@ static ISR_CODE bool ISR_FUNC(keypad_enqueue_keycode)(uint8_t c)
 
     if(c == CMD_JOG_CANCEL || (c == ASCII_CAN && !(state_get() & (STATE_ESTOP|STATE_ALARM)))) {
         keyreleased = true;
-        if(jogging) {
-            jogging = false;
-            grbl.enqueue_realtime_command(CMD_JOG_CANCEL);
-        }
+        // Always pass cancel to grblHAL. The plugin's jogging flag can lag
+        // queued keypress processing or planner state, so it is not a safe
+        // condition for deciding whether a cancel is needed.
+        jogging = false;
+        grbl.enqueue_realtime_command(CMD_JOG_CANCEL);
         keybuf.tail = keybuf.head;      // Flush keycode buffer.
     } else if(bptr != keybuf.tail) {    // If not buffer full
         keybuf.buf[keybuf.head] = c;    // add data to buffer
