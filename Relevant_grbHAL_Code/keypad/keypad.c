@@ -34,7 +34,7 @@
 #include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
 
-#define KEYPAD_VERSION "1.48"
+#define KEYPAD_VERSION "1.49"
 
 typedef struct {
     char buf[KEYBUF_SIZE];
@@ -138,10 +138,8 @@ static ISR_CODE bool runtime_setting_receive (uint8_t c)
         return false;
     }
 
-    if(c == RUNTIME_SETTING_MAGIC) { // resynchronize on a new frame marker
-        runtime_setting_packet_index = 1;
-        return true;
-    }
+    // Once a frame starts, every following byte is payload until the
+    // fixed-length frame is complete. 0xF0 is valid inside IEEE-754 data.
 
     runtime_setting_packet[runtime_setting_packet_index - 1] = c;
 
