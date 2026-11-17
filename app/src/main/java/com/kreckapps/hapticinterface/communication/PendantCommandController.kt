@@ -839,7 +839,7 @@ class PendantCommandController(
             jogStopRequested ||
             (continuousJog && !continuousJogActive)
         ) {
-            releaseControl("Jog cancelled.")
+            finish("Jog cancelled.")
             return
         }
 
@@ -852,7 +852,7 @@ class PendantCommandController(
         }
 
         val axis = jogAxis ?: run {
-            releaseControl("No jog axis was selected.")
+            finish("No jog axis was selected.")
             return
         }
 
