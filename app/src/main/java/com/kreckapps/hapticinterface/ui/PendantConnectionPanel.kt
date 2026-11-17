@@ -335,6 +335,7 @@ fun PendantConnectionPanel(
                         Text("Connect")
                     }
                 }
+                }
                 TextButton(
                     onClick = { detailsExpanded = !detailsExpanded }
                 ) {
