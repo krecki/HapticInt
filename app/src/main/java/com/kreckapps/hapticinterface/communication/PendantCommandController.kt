@@ -462,9 +462,8 @@ class PendantCommandController(
     }
 
     /**
-     * Sends the real-time jog-cancel byte and waits for an Idle report.
-     * It deliberately does not release MPG control until the jog has
-     * stopped or the controller state is declared uncertain.
+     * Sends the keypad plugin's real-time jog-cancel byte and waits for
+     * an Idle report. Keypad jogging runs with MPG mode disabled.
      */
     private fun requestJogCancellation(message: String) {
         cancelTimeout()
@@ -1260,13 +1259,13 @@ class PendantCommandController(
     fun releaseResources() {
         cancelTimeout()
 
-        // Best-effort cleanup if the app is being destroyed while
-        // the controller is still in pendant mode.
-        if (currentStatus.pendantInControl == true) {
-            if (operation == Operation.JOG) {
-                bluetooth.sendRealtime(JOG_CANCEL.toChar())
-            }
+        // Best-effort cleanup if the app is destroyed during a jog or
+        // while a coordinate/homing operation has MPG control.
+        if (operation == Operation.JOG) {
+            bluetooth.sendRealtime(JOG_CANCEL.toChar())
+        }
 
+        if (currentStatus.pendantInControl == true) {
             bluetooth.sendRealtime(MPG_TOGGLE.toChar())
         }
 
