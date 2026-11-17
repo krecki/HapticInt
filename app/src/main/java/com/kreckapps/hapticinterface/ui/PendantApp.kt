@@ -389,7 +389,16 @@ fun PendantApp() {
                     lastCommand = lastIncrementalCommand,
                     onStepChanged = { axis, value ->
                         axisSteps[axis] = value
-                        if (selectedMode == 2 && axis == "X") configureSelectedJogMode(2)
+                        if (selectedMode == 2) {
+                            val step = value.toDoubleOrNull()
+                            if (step != null && step > 0.0) {
+                                val stepMm = step *
+                                        if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+                                jogModeConfigurationAction?.invoke(
+                                    2, stepMm, jogFeedRateMmMin.toDouble()
+                                )
+                            }
+                        }
                     },
                     onCommand = { command ->
                         lastIncrementalCommand = command
