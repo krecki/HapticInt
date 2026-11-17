@@ -24,7 +24,8 @@ fun IncrementalJogScreen(
     displayUnits: MachineUnits,
     feedRate: Float,
     onFeedRateChanged: (Float) -> Unit,
-    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit
+    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit,
+    onJogCancel: () -> Unit
 ) {
     val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
         "mm"
@@ -134,7 +135,8 @@ fun IncrementalJogScreen(
                 }
             },
             onStop = {
-                onCommand("Jog canceled")
+                onJogCancel()
+                onCommand("Jog cancel requested")
             }
         )
 
