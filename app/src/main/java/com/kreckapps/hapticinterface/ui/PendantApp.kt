@@ -347,6 +347,9 @@ fun PendantApp() {
                             feedRate,
                             units
                         )
+                    },
+                    onJogCancel = {
+                        stopJogAction?.invoke()
                     }
                 )
 
@@ -419,6 +422,9 @@ fun PendantApp() {
                             feedRate,
                             units
                         )
+                    },
+                    onJogCancel = {
+                        stopJogAction?.invoke()
                     }
                 )
             }
