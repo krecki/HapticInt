@@ -34,7 +34,8 @@ fun MPGScreen(
     axis: String,
     onAxisChanged: (String) -> Unit,
     displayUnits: MachineUnits,
-    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit
+    onJogRequest: (Char, Double, Double, MachineUnits) -> Unit,
+    onJogCancel: () -> Unit
 ) {
     val resolutionOptions = if (displayUnits == MachineUnits.MILLIMETERS) {
         listOf("0.01", "0.1", "1.0")
@@ -117,7 +118,8 @@ fun MPGScreen(
                         displayUnits
                     )
                 }
-            }
+            },
+            onDragFinished = onJogCancel
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -159,13 +161,15 @@ fun RotaryWheel(
     position: Int,
     pulsesPerRev: Int,
     onPositionChanged: (Int) -> Unit,
-    onDetent: (Int) -> Unit
+    onDetent: (Int) -> Unit,
+    onDragFinished: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
 
     val latestPosition by rememberUpdatedState(position)
     val latestPositionCallback by rememberUpdatedState(onPositionChanged)
     val latestDetentCallback by rememberUpdatedState(onDetent)
+    val latestDragFinished by rememberUpdatedState(onDragFinished)
 
     var accumulatedAngle by remember {
         mutableFloatStateOf(0f)
@@ -186,10 +190,21 @@ fun RotaryWheel(
             )
             .pointerInput(safePulsesPerRev) {
                 var dragPosition = latestPosition
+                var sentJogDuringDrag = false
 
                 detectDragGestures(
                     onDragStart = {
                         dragPosition = latestPosition
+                        accumulatedAngle = 0f
+                        sentJogDuringDrag = false
+                    },
+                    onDragEnd = {
+                        if (sentJogDuringDrag) latestDragFinished()
+                        accumulatedAngle = 0f
+                    },
+                    onDragCancel = {
+                        if (sentJogDuringDrag) latestDragFinished()
+                        accumulatedAngle = 0f
                     }
                 ) { change, _ ->
                     val center = Offset(
@@ -219,6 +234,7 @@ fun RotaryWheel(
                         dragPosition += 1
                         latestPositionCallback(dragPosition)
                         latestDetentCallback(1)
+                        sentJogDuringDrag = true
 
                         accumulatedAngle -= detentAngle
 
@@ -231,6 +247,7 @@ fun RotaryWheel(
                         dragPosition -= 1
                         latestPositionCallback(dragPosition)
                         latestDetentCallback(-1)
+                        sentJogDuringDrag = true
 
                         accumulatedAngle += detentAngle
 
