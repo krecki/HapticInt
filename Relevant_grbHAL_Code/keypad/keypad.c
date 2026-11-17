@@ -119,7 +119,7 @@ FLASHMEM static void keypad_apply_runtime_setting (void *data)
     if(jogging && !(state_get() & STATE_JOG))
         jogging = false;
 
-    if(!jogging && packet[0] == RUNTIME_SETTING_COMMAND && runtime_setting_valid(packet[1], value)) {
+    if(packet[0] == RUNTIME_SETTING_COMMAND && runtime_setting_valid(packet[1], value)) {
         switch(packet[1]) {
             case 1: jog.step_speed = value; break;
             case 2: jog.slow_speed = value; break;
