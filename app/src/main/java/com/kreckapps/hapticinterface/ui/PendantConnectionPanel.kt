@@ -68,6 +68,11 @@ fun PendantConnectionPanel(
     var commandBusy by remember {
         mutableStateOf(false)
     }
+
+    // Keep the connection controls out of the way while operating the pendant.
+    var detailsExpanded by remember {
+        mutableStateOf(true)
+    }
     
     val latestCommandBusy = rememberUpdatedState(commandBusy)
 
@@ -167,6 +172,7 @@ fun PendantConnectionPanel(
 
                     when (state) {
                         PendantBluetoothManager.ConnectionState.CONNECTED -> {
+                            detailsExpanded = false
                             commandController.updateConnection(true)
 
                             // Request a complete grblHAL status report.
@@ -178,6 +184,7 @@ fun PendantConnectionPanel(
 
                         PendantBluetoothManager.ConnectionState.DISCONNECTED,
                         PendantBluetoothManager.ConnectionState.ERROR -> {
+                            detailsExpanded = true
                             commandController.updateConnection(false)
                         }
 
@@ -299,7 +306,10 @@ fun PendantConnectionPanel(
                 )
             }
 
-            when (connectionState) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (connectionState) {
                 PendantBluetoothManager.ConnectionState.CONNECTING -> {
                     CircularProgressIndicator(
                         modifier = Modifier.padding(horizontal = 12.dp)
@@ -325,9 +335,15 @@ fun PendantConnectionPanel(
                         Text("Connect")
                     }
                 }
+                TextButton(
+                    onClick = { detailsExpanded = !detailsExpanded }
+                ) {
+                    Text(if (detailsExpanded) "Hide" else "Controls")
+                }
             }
         }
 
+        if (detailsExpanded) {
         // Work Coordinate System Selector
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -386,6 +402,7 @@ fun PendantConnectionPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary
             )
+        }
         }
     }
 }
