@@ -327,6 +327,34 @@ class PendantCommandController(
         )
     }
 
+    /**
+     * Preloads the volatile keypad settings when the user enters a jog mode.
+     * Values are supplied in mm and mm/min.
+     */
+    fun configureJogMode(mode: Int, stepDistanceMm: Double, feedRateMmMin: Double) {
+        if (!canSendKeypadJog()) return
+        val speed = feedRateMmMin.toFloat()
+        if (!speed.isFinite() || speed !in 1f..10000f) return
+
+        when (mode) {
+            0, 2 -> {
+                val distance = stepDistanceMm.toFloat()
+                if (!distance.isFinite() || distance !in 0.001f..1000f) return
+                if (runtimeStepSpeedMmMin != speed && sendRuntimeSetting(1, speed))
+                    runtimeStepSpeedMmMin = speed
+                if (runtimeStepDistanceMm != distance && sendRuntimeSetting(4, distance))
+                    runtimeStepDistanceMm = distance
+            }
+            1 -> {
+                val distance = CONTINUOUS_JOG_DISTANCE_MM.toFloat()
+                if (runtimeFastSpeedMmMin != speed && sendRuntimeSetting(3, speed))
+                    runtimeFastSpeedMmMin = speed
+                if (runtimeFastDistanceMm != distance && sendRuntimeSetting(6, distance))
+                    runtimeFastDistanceMm = distance
+            }
+        }
+    }
+
     /** Update the fast jog speed as the continuous-mode slider changes. */
     fun updateContinuousJogSpeed(feedRate: Double, units: MachineUnits) {
         if (!validateFeedRate(feedRate, units)) return
