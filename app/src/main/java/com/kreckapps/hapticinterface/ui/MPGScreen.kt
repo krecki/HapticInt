@@ -66,12 +66,6 @@ fun MPGScreen(
         "in"
     }
 
-    val feedUnit = if (displayUnits == MachineUnits.MILLIMETERS) {
-        "mm/min"
-    } else {
-        "in/min"
-    }
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -103,8 +97,6 @@ fun MPGScreen(
             selected = displayedResolution,
             onSelected = onResolutionChanged
         )
-
-        Spacer(modifier = Modifier.height(18.dp))
 
         Spacer(modifier = Modifier.height(18.dp))
 
