@@ -90,6 +90,13 @@ class PendantCommandController(
                 currentStatus.machineState
             } else {
                 "Disconnected"
+            },
+            // Do not reuse the previous connection's G20/G21 state. The
+            // fresh $G report must establish units for this connection.
+            position = if (connected) {
+                currentStatus.position.copy(modalStateKnown = false)
+            } else {
+                currentStatus.position
             }
         )
 
@@ -348,11 +355,15 @@ class PendantCommandController(
      * are deliberately not part of the jog command pipeline.
      */
     fun stopJog() {
-        if (!continuousJogActive) return
+        // Jog cancel is valid for Step, Fast, and queued MPG detent moves.
+        // Do not gate it on the UI's continuous-jog pressed state.
         continuousJogActive = false
         if (currentStatus.connected && currentStatus.pendantInControl == false) {
-            bluetooth.sendRealtime(JOG_CANCEL.toChar())
-            onMessageChanged("Jog cancel sent.")
+            if (bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
+                onMessageChanged("Jog cancel sent.")
+            } else {
+                onMessageChanged("Could not send jog cancel.")
+            }
         } else {
             onMessageChanged("Cannot send jog cancel: keypad mode is not confirmed.")
         }
