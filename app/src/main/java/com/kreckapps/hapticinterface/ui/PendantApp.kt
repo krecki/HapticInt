@@ -146,7 +146,8 @@ fun PendantApp() {
             (axisSteps["X"]?.toDoubleOrNull() ?: 0.01) *
                     if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
         }
-        jogModeConfigurationAction?.invoke(mode, stepMm, jogFeedRateMmMin.toDouble())
+        val feedMmMin = if (mode == 0) 2000.0 else jogFeedRateMmMin.toDouble()
+        jogModeConfigurationAction?.invoke(mode, stepMm, feedMmMin)
     }
 
     LaunchedEffect(
