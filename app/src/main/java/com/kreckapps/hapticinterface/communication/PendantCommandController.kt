@@ -89,6 +89,8 @@ class PendantCommandController(
     fun updateConnection(connected: Boolean) {
         currentStatus = currentStatus.copy(
             connected = connected,
+            // Do not trust the previous Bluetooth session's MPG state.
+            pendantInControl = if (connected) null else currentStatus.pendantInControl,
             machineState = if (connected) {
                 currentStatus.machineState
             } else {
