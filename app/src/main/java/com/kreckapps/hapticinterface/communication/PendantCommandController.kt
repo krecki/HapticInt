@@ -986,10 +986,14 @@ class PendantCommandController(
                     return
                 }
 
-                startTimeout(4000) {
-                    releaseControl(
-                        "Timed out verifying the $axis coordinate."
-                    )
+                startTimeout(if (operation == Operation.GO_TO_ZERO_AXIS) 600000 else 4000) {
+                    if (operation == Operation.GO_TO_ZERO_AXIS) {
+                        markControlUncertain("Timed out waiting for the Go-to-zero move to finish. Check position and G90/G91 before continuing.")
+                    } else {
+                        releaseControl(
+                            "Timed out verifying the $axis coordinate."
+                        )
+                    }
                 }
             }
 
@@ -1039,6 +1043,11 @@ class PendantCommandController(
             'Z' -> currentStatus.position.workZ
             else -> return
         }
+
+        // A G-code acknowledgement means the command was accepted, not that
+        // the axis has physically finished moving. Wait for Idle as well as
+        // the requested coordinate before restoring the modal distance mode.
+        if (currentStatus.machineState != "Idle") return
 
         if (abs(actualValue - expectedValue) <= POSITION_TOLERANCE) {
             if (operation == Operation.GO_TO_ZERO_AXIS &&
@@ -1107,6 +1116,12 @@ class PendantCommandController(
         }
 
         if (currentStatus.pendantInControl == true) {
+            if (operation == Operation.GO_TO_ZERO_AXIS &&
+                originalDistanceMode == DistanceMode.INCREMENTAL
+            ) {
+                restoreDistanceModeOrMarkUncertain("Controller rejected the Go-to-zero move ($error).")
+                return
+            }
             releaseControl(
                 "Controller rejected the command ($error)."
             )
