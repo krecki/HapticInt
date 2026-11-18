@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.kreckapps.hapticinterface.model.MachineUnits
 
 private const val MAX_CONTINUOUS_FEED_MM_MIN = 2000f
@@ -79,7 +80,7 @@ fun ContinuousJogScreen(
         )
 
         Text(
-            text = "${safeSpeed.toInt()} $unitLabel",
+            text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
@@ -91,7 +92,7 @@ fun ContinuousJogScreen(
         )
 
         Text(
-            text = "Maximum: ${maxFeedRate.toInt()} $unitLabel",
+            text = "Maximum: ${String.format(Locale.US, "%.1f", maxFeedRate)} $unitLabel",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -133,7 +134,7 @@ fun ContinuousJogScreen(
         )
 
         Text(
-            text = "Feed rate: ${safeSpeed.toInt()} $unitLabel",
+            text = "Feed rate: ${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
             fontSize = 14.sp
         )
     }
