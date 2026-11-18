@@ -27,7 +27,8 @@ fun PositionDisplay(
     onDisplayUnitsChanged: (MachineUnits) -> Unit,
     zeroXEnabled: Boolean,
     onZeroAxis: (Char) -> Unit,
-    onSetAxis: (Char, Double) -> Unit
+    onSetAxis: (Char, Double) -> Unit,
+    onGoToZeroAxis: (Char) -> Unit
 ) {
     val position = status.position
 
@@ -286,6 +287,19 @@ fun PositionDisplay(
                         )
                     ) {
                         Text("Zero")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            onGoToZeroAxis(axis)
+                        },
+                        enabled = zeroXEnabled,
+                        contentPadding = PaddingValues(
+                            horizontal = 8.dp,
+                            vertical = 8.dp
+                        )
+                    ) {
+                        Text("Go")
                     }
                 }
             }
