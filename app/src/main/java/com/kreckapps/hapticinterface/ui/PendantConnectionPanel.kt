@@ -27,6 +27,7 @@ fun PendantConnectionPanel(
     onMachineStatusChanged: (MachineStatus) -> Unit,
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
+    onGoToZeroAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
     onIncrementalJogActionAvailable:
         (((Char, Double, Double, MachineUnits) -> Unit)?) -> Unit,
     onContinuousJogStartActionAvailable:
@@ -40,6 +41,7 @@ fun PendantConnectionPanel(
     val latestStatusCallback = rememberUpdatedState(onMachineStatusChanged)
     val latestZeroAxisCallback = rememberUpdatedState(onZeroAxisActionAvailable)
     val latestSetAxisCallback = rememberUpdatedState(onSetAxisActionAvailable)
+    val latestGoToZeroAxisCallback = rememberUpdatedState(onGoToZeroAxisActionAvailable)
     val latestIncrementalJogCallback =
         rememberUpdatedState(onIncrementalJogActionAvailable)
     val latestContinuousJogCallback =
@@ -107,6 +109,12 @@ fun PendantConnectionPanel(
         }
     }
 
+    val goToZeroAxisAction = remember(commandController) {
+        { axis: Char, feedRateMmMin: Double ->
+            commandController.goToWorkZero(axis, feedRateMmMin)
+        }
+    }
+
     // Publish the incremental jog action.
     val incrementalJogAction = remember(commandController) {
         { axis: Char, distance: Double, feedRate: Double, units: MachineUnits ->
@@ -146,6 +154,7 @@ fun PendantConnectionPanel(
     SideEffect {
         latestZeroAxisCallback.value(zeroAxisAction)
         latestSetAxisCallback.value(setAxisAction)
+        latestGoToZeroAxisCallback.value(goToZeroAxisAction)
         latestIncrementalJogCallback.value(incrementalJogAction)
         latestContinuousJogCallback.value(continuousJogStartAction)
         latestStopJogCallback.value(stopJogAction)
@@ -206,6 +215,7 @@ fun PendantConnectionPanel(
         onDispose {
             latestZeroAxisCallback.value(null)
             latestSetAxisCallback.value(null)
+            latestGoToZeroAxisCallback.value(null)
             latestIncrementalJogCallback.value(null)
             latestContinuousJogCallback.value(null)
             latestStopJogCallback.value(null)
