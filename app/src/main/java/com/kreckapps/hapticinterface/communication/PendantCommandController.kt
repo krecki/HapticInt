@@ -32,6 +32,7 @@ class PendantCommandController(
         SELECT_WCS,
         ZERO_AXIS,
         SET_AXIS,
+        GO_TO_ZERO_AXIS,
         HOME_MACHINE
     }
     companion object {
@@ -62,6 +63,7 @@ class PendantCommandController(
     private var requestedWcs: String? = null
     private var requestedAxis: Char? = null
     private var requestedValue: Double? = null
+    private var requestedFeedRateMmMin: Double? = null
 
     private var timeoutRunnable: Runnable? = null
     private var releaseMessage = ""
@@ -273,6 +275,38 @@ class PendantCommandController(
         beginControlHandover(
             "Requesting pendant control to set $normalizedAxis..."
         )
+    }
+
+    // ------------------------------------------------
+    // Move one work axis to zero using the app feed-rate setting
+    // ------------------------------------------------
+
+    fun goToWorkZero(axis: Char, feedRateMmMin: Double) {
+        val normalizedAxis = axis.uppercaseChar()
+        if (normalizedAxis !in VALID_AXES) {
+            onMessageChanged("Invalid axis.")
+            return
+        }
+        if (!feedRateMmMin.isFinite() || feedRateMmMin <= 0.0 ||
+            feedRateMmMin > MAX_FEED_MM_MIN + 0.001) {
+            onMessageChanged("Invalid Go-to-zero feed rate.")
+            return
+        }
+        if (!canStartOperation()) return
+
+        val wcs = currentStatus.position.activeWcs
+        if (wcs !in VALID_WCS) {
+            onMessageChanged("Active work coordinate system is invalid.")
+            return
+        }
+
+        operation = Operation.GO_TO_ZERO_AXIS
+        requestedWcs = wcs
+        requestedAxis = normalizedAxis
+        requestedValue = 0.0
+        requestedFeedRateMmMin = feedRateMmMin.coerceAtMost(MAX_FEED_MM_MIN)
+
+        beginControlHandover("Requesting pendant control to move $normalizedAxis to work zero...")
     }
 
     // ------------------------------------------------
@@ -730,7 +764,8 @@ class PendantCommandController(
             }
 
             Operation.ZERO_AXIS,
-            Operation.SET_AXIS -> {
+            Operation.SET_AXIS,
+            Operation.GO_TO_ZERO_AXIS -> {
                 val wcs = requestedWcs ?: return
 
                 val pNumber = when (wcs) {
@@ -760,6 +795,22 @@ class PendantCommandController(
                     .stripTrailingZeros()
                     .toPlainString()
 
+                if (operation == Operation.GO_TO_ZERO_AXIS) {
+                    val feedMmMin = requestedFeedRateMmMin ?: run {
+                        releaseControl("No feed rate was supplied.")
+                        return
+                    }
+                    val feedInControllerUnits = if (
+                        currentStatus.position.units == MachineUnits.INCHES
+                    ) feedMmMin / MM_PER_INCH else feedMmMin
+                    val formattedFeed = BigDecimal.valueOf(feedInControllerUnits)
+                        .stripTrailingZeros()
+                        .toPlainString()
+                    onMessageChanged(
+                        "Pendant has control. Moving $axis to $wcs work zero..."
+                    )
+                    "G90 G1 $axis$formattedValue F$formattedFeed"
+                } else {
                 if (operation == Operation.ZERO_AXIS) {
                     onMessageChanged(
                         "Pendant has control. Zeroing $wcs $axis..."
@@ -772,6 +823,7 @@ class PendantCommandController(
                 }
 
                 "G10 L20 P$pNumber $axis$formattedValue"
+                }
             }
 
             Operation.HOME_MACHINE -> {
@@ -859,7 +911,8 @@ class PendantCommandController(
             }
 
             Operation.ZERO_AXIS,
-            Operation.SET_AXIS -> {
+            Operation.SET_AXIS,
+            Operation.GO_TO_ZERO_AXIS -> {
                 stage = Stage.WAITING_FOR_POSITION_REPORT
 
                 val axis = requestedAxis ?: '?'
@@ -930,10 +983,10 @@ class PendantCommandController(
         }
 
         if (abs(actualValue - expectedValue) <= POSITION_TOLERANCE) {
-            val message = if (operation == Operation.ZERO_AXIS) {
-                "$requestedWcs $axis successfully set to zero."
-            } else {
-                "$requestedWcs $axis successfully set to $expectedValue."
+            val message = when (operation) {
+                Operation.ZERO_AXIS -> "$requestedWcs $axis successfully set to zero."
+                Operation.GO_TO_ZERO_AXIS -> "$axis reached $requestedWcs work zero."
+                else -> "$requestedWcs $axis successfully set to $expectedValue."
             }
 
             releaseControl(message)
@@ -1054,6 +1107,7 @@ class PendantCommandController(
         requestedWcs = null
         requestedAxis = null
         requestedValue = null
+        requestedFeedRateMmMin = null
         operation = null
         continuousJogActive = false
     }
