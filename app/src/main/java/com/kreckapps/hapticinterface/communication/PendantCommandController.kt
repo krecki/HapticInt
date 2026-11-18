@@ -779,7 +779,7 @@ class PendantCommandController(
         if (operation == Operation.GO_TO_ZERO_AXIS) {
             stage = Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT
             onMessageChanged("Checking G90/G91 before moving to work zero...")
-            if (!bluetooth.sendCommand("\\$G")) {
+            if (!bluetooth.sendCommand("\$G")) {
                 releaseControl("Could not read the current G90/G91 mode. Go to zero was not started.")
                 return
             }
@@ -953,7 +953,7 @@ class PendantCommandController(
         if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
             stage = Stage.WAITING_FOR_DISTANCE_MODE_VERIFY
             onMessageChanged("G91 accepted. Verifying restored distance mode...")
-            if (!bluetooth.sendCommand("\\$G")) {
+            if (!bluetooth.sendCommand("\$G")) {
                 markControlUncertain("G91 was accepted, but its restoration could not be verified. Check controller mode.")
                 return
             }
