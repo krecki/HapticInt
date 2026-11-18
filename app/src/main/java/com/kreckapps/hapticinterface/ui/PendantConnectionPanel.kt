@@ -220,23 +220,16 @@ fun PendantConnectionPanel(
         }
     }
 
-    // Request position every 100 ms and modal state every 1 second.
+    // Position polling is independent of modal-state synchronization.
+    // $G is requested only during the controlled connection/WCS handshakes,
+    // when the normal protocol stream is active.
     LaunchedEffect(connectionState) {
         if (
             connectionState ==
             PendantBluetoothManager.ConnectionState.CONNECTED
         ) {
-            var pollCount = 0
-
             while (true) {
                 bluetoothManager.sendRealtime('?')
-
-                if (pollCount % 10 == 0 && !latestCommandBusy.value) {
-                    bluetoothManager.sendCommand("\$G")
-                }
-
-                pollCount++
-
                 delay(100)
             }
         }
