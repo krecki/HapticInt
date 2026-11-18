@@ -3,6 +3,7 @@ package com.kreckapps.hapticinterface.communication
 import com.kreckapps.hapticinterface.model.MachinePosition
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
+import com.kreckapps.hapticinterface.model.DistanceMode
 
 object GrblStatusParser {
 
@@ -138,6 +139,7 @@ object GrblStatusParser {
         var activeWcs = previous.position.activeWcs
         var units = previous.position.units
         var unitsReported = false
+        var distanceMode = previous.position.distanceMode
 
         for (word in words) {
             when (word) {
@@ -150,6 +152,8 @@ object GrblStatusParser {
                     units = MachineUnits.MILLIMETERS
                     unitsReported = true
                 }
+                "G90" -> distanceMode = DistanceMode.ABSOLUTE
+                "G91" -> distanceMode = DistanceMode.INCREMENTAL
             }
         }
 
@@ -157,6 +161,7 @@ object GrblStatusParser {
         val newPosition = previous.position.copy(
             activeWcs = activeWcs,
             units = units,
+            distanceMode = distanceMode,
             modalStateKnown = previous.position.modalStateKnown || unitsReported,
             // A modal report can reveal a WCS change before the next status
             // report. Discard the old offset until the new WCO arrives.
