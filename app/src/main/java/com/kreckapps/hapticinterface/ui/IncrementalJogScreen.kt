@@ -10,6 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.kreckapps.hapticinterface.model.MachineUnits
 
 private const val MAX_FEED_MM_MIN = 2000f
@@ -81,7 +82,7 @@ fun IncrementalJogScreen(
         )
 
         Text(
-            text = "${safeFeedRate.toInt()} $feedUnit",
+            text = "${String.format(Locale.US, "%.1f", safeFeedRate)} $feedUnit",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
@@ -93,7 +94,7 @@ fun IncrementalJogScreen(
         )
 
         Text(
-            text = "Maximum: ${maxFeedRate.toInt()} $feedUnit",
+            text = "Maximum: ${String.format(Locale.US, "%.1f", maxFeedRate)} $feedUnit",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
