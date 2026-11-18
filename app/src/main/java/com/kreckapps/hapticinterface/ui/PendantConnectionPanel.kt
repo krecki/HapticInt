@@ -75,8 +75,6 @@ fun PendantConnectionPanel(
         mutableStateOf(true)
     }
     
-    val latestCommandBusy = rememberUpdatedState(commandBusy)
-
     val commandController = remember(bluetoothManager) {
         PendantCommandController(
             bluetooth = bluetoothManager,
