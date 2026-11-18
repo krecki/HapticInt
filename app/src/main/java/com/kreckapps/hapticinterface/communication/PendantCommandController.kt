@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
+import com.kreckapps.hapticinterface.model.DistanceMode
 import java.math.BigDecimal
 import kotlin.math.abs
 
@@ -20,6 +21,8 @@ class PendantCommandController(
         WAITING_FOR_INITIAL_LISTENING,
         WAITING_FOR_INITIAL_CONTROL,
         WAITING_FOR_INITIAL_MODAL,
+        WAITING_FOR_GO_TO_ZERO_MODAL_REPORT,
+        WAITING_FOR_DISTANCE_MODE_RESTORE,
         WAITING_FOR_CONTROL,
         WAITING_FOR_COMMAND,
         WAITING_FOR_MODAL_REPORT,
@@ -64,6 +67,7 @@ class PendantCommandController(
     private var requestedAxis: Char? = null
     private var requestedValue: Double? = null
     private var requestedFeedRateMmMin: Double? = null
+    private var originalDistanceMode: DistanceMode? = null
 
     private var timeoutRunnable: Runnable? = null
     private var releaseMessage = ""
@@ -103,6 +107,7 @@ class PendantCommandController(
             position = if (connected) {
                 currentStatus.position.copy(
                     modalStateKnown = false,
+                    distanceMode = null,
                     wcoX = null,
                     wcoY = null,
                     wcoZ = null
@@ -728,6 +733,17 @@ class PendantCommandController(
 
         onStatusChanged(currentStatus)
 
+        if (stage == Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT) {
+            val mode = currentStatus.position.distanceMode
+            if (mode == null) {
+                markControlUncertain("Controller did not report G90/G91. Go to zero was not started.")
+            } else {
+                originalDistanceMode = mode
+                sendGoToZeroMove()
+            }
+            return
+        }
+
         if (stage == Stage.WAITING_FOR_INITIAL_MODAL &&
             currentStatus.position.modalStateKnown
         ) {
@@ -750,6 +766,19 @@ class PendantCommandController(
     // ------------------------------------------------
 
     private fun sendPendingCommand() {
+        if (operation == Operation.GO_TO_ZERO_AXIS) {
+            stage = Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT
+            onMessageChanged("Checking G90/G91 before moving to work zero...")
+            if (!bluetooth.sendCommand("\\$G")) {
+                releaseControl("Could not read the current G90/G91 mode. Go to zero was not started.")
+                return
+            }
+            startTimeout(4000) {
+                releaseControl("Timed out reading G90/G91. Go to zero was not started.")
+            }
+            return
+        }
+
         stage = Stage.WAITING_FOR_COMMAND
 
         val command = when (operation) {
@@ -795,22 +824,6 @@ class PendantCommandController(
                     .stripTrailingZeros()
                     .toPlainString()
 
-                if (operation == Operation.GO_TO_ZERO_AXIS) {
-                    val feedMmMin = requestedFeedRateMmMin ?: run {
-                        releaseControl("No feed rate was supplied.")
-                        return
-                    }
-                    val feedInControllerUnits = if (
-                        currentStatus.position.units == MachineUnits.INCHES
-                    ) feedMmMin / MM_PER_INCH else feedMmMin
-                    val formattedFeed = BigDecimal.valueOf(feedInControllerUnits)
-                        .stripTrailingZeros()
-                        .toPlainString()
-                    onMessageChanged(
-                        "Pendant has control. Moving $axis to $wcs work zero..."
-                    )
-                    "G90 G1 $axis$formattedValue F$formattedFeed"
-                } else {
                 if (operation == Operation.ZERO_AXIS) {
                     onMessageChanged(
                         "Pendant has control. Zeroing $wcs $axis..."
@@ -823,7 +836,6 @@ class PendantCommandController(
                 }
 
                 "G10 L20 P$pNumber $axis$formattedValue"
-                }
             }
 
             Operation.HOME_MACHINE -> {
@@ -845,6 +857,48 @@ class PendantCommandController(
             releaseControl(
                 "Timed out waiting for the controller response."
             )
+        }
+    }
+
+    private fun sendGoToZeroMove() {
+        val axis = requestedAxis ?: run {
+            releaseControl("No axis was selected.")
+            return
+        }
+        val feedMmMin = requestedFeedRateMmMin ?: run {
+            releaseControl("No feed rate was supplied.")
+            return
+        }
+        val feedInControllerUnits = if (
+            currentStatus.position.units == MachineUnits.INCHES
+        ) feedMmMin / MM_PER_INCH else feedMmMin
+        val formattedFeed = BigDecimal.valueOf(feedInControllerUnits)
+            .stripTrailingZeros()
+            .toPlainString()
+        stage = Stage.WAITING_FOR_COMMAND
+        onMessageChanged("Pendant has control. Moving $axis to work zero in G90...")
+        if (!bluetooth.sendCommand("G90 G1 $axis${formatNumber(0.0)} F$formattedFeed")) {
+            restoreDistanceModeOrMarkUncertain("Failed to send Go-to-zero move.")
+            return
+        }
+        startTimeout(120000) {
+            markControlUncertain("Timed out waiting for Go-to-zero move. Controller mode and position need checking.")
+        }
+    }
+
+    private fun restoreDistanceModeOrMarkUncertain(message: String) {
+        if (originalDistanceMode == DistanceMode.INCREMENTAL && currentStatus.pendantInControl == true) {
+            stage = Stage.WAITING_FOR_DISTANCE_MODE_RESTORE
+            onMessageChanged("$message Attempting to restore G91...")
+            if (!bluetooth.sendCommand("G91")) {
+                markControlUncertain("$message Could not restore G91. Check controller mode.")
+                return
+            }
+            startTimeout(4000) {
+                markControlUncertain("$message Timed out restoring G91. Check controller mode.")
+            }
+        } else {
+            releaseControl(message)
         }
     }
 
@@ -886,6 +940,10 @@ class PendantCommandController(
     // ------------------------------------------------
 
     private fun handleCommandAccepted() {
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
+            releaseControl("Go-to-zero move completed; original G91 mode restored.")
+            return
+        }
         if (stage != Stage.WAITING_FOR_COMMAND) return
 
         when (operation) {
@@ -983,6 +1041,12 @@ class PendantCommandController(
         }
 
         if (abs(actualValue - expectedValue) <= POSITION_TOLERANCE) {
+            if (operation == Operation.GO_TO_ZERO_AXIS &&
+                originalDistanceMode == DistanceMode.INCREMENTAL
+            ) {
+                restoreDistanceModeOrMarkUncertain("$axis reached work zero.")
+                return
+            }
             val message = when (operation) {
                 Operation.ZERO_AXIS -> "$requestedWcs $axis successfully set to zero."
                 Operation.GO_TO_ZERO_AXIS -> "$axis reached $requestedWcs work zero."
@@ -1036,6 +1100,11 @@ class PendantCommandController(
 
     private fun handleCommandError(error: String) {
         if (stage == Stage.IDLE) return
+
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
+            markControlUncertain("Controller rejected G91 restoration ($error). Check controller mode.")
+            return
+        }
 
         if (currentStatus.pendantInControl == true) {
             releaseControl(
@@ -1108,6 +1177,7 @@ class PendantCommandController(
         requestedAxis = null
         requestedValue = null
         requestedFeedRateMmMin = null
+        originalDistanceMode = null
         operation = null
         continuousJogActive = false
     }
