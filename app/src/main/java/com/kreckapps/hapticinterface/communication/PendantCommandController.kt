@@ -23,6 +23,7 @@ class PendantCommandController(
         WAITING_FOR_INITIAL_MODAL,
         WAITING_FOR_GO_TO_ZERO_MODAL_REPORT,
         WAITING_FOR_DISTANCE_MODE_RESTORE,
+        WAITING_FOR_DISTANCE_MODE_VERIFY,
         WAITING_FOR_CONTROL,
         WAITING_FOR_COMMAND,
         WAITING_FOR_MODAL_REPORT,
@@ -744,6 +745,15 @@ class PendantCommandController(
             return
         }
 
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_VERIFY) {
+            if (currentStatus.position.distanceMode == DistanceMode.INCREMENTAL) {
+                releaseControl("Go-to-zero move completed; original G91 mode restored and verified.")
+            } else {
+                markControlUncertain("Controller did not confirm restoration of G91. Check controller mode.")
+            }
+            return
+        }
+
         if (stage == Stage.WAITING_FOR_INITIAL_MODAL &&
             currentStatus.position.modalStateKnown
         ) {
@@ -941,7 +951,15 @@ class PendantCommandController(
 
     private fun handleCommandAccepted() {
         if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
-            releaseControl("Go-to-zero move completed; original G91 mode restored.")
+            stage = Stage.WAITING_FOR_DISTANCE_MODE_VERIFY
+            onMessageChanged("G91 accepted. Verifying restored distance mode...")
+            if (!bluetooth.sendCommand("\\$G")) {
+                markControlUncertain("G91 was accepted, but its restoration could not be verified. Check controller mode.")
+                return
+            }
+            startTimeout(4000) {
+                markControlUncertain("Timed out verifying restored G91. Check controller mode.")
+            }
             return
         }
         if (stage != Stage.WAITING_FOR_COMMAND) return
