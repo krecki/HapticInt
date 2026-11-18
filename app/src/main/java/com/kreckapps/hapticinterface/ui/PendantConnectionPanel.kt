@@ -183,11 +183,9 @@ fun PendantConnectionPanel(
                             detailsExpanded = false
                             commandController.updateConnection(true)
 
-                            // Request a complete grblHAL status report.
-                            bluetoothManager.sendRealtime(0x87.toChar())
-
-                            // Request the active G-code modal state.
-                            bluetoothManager.sendCommand("\$G")
+                            // Synchronize units/modal state through the
+                            // normal protocol stream, then return to keypad mode.
+                            commandController.initializeControllerState()
                         }
 
                         PendantBluetoothManager.ConnectionState.DISCONNECTED,
