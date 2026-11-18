@@ -17,6 +17,9 @@ class PendantCommandController(
 
     private enum class Stage {
         IDLE,
+        WAITING_FOR_INITIAL_LISTENING,
+        WAITING_FOR_INITIAL_CONTROL,
+        WAITING_FOR_INITIAL_MODAL,
         WAITING_FOR_CONTROL,
         WAITING_FOR_COMMAND,
         WAITING_FOR_MODAL_REPORT,
@@ -94,7 +97,12 @@ class PendantCommandController(
             // Do not reuse the previous connection's G20/G21 state. The
             // fresh $G report must establish units for this connection.
             position = if (connected) {
-                currentStatus.position.copy(modalStateKnown = false)
+                currentStatus.position.copy(
+                    modalStateKnown = false,
+                    wcoX = null,
+                    wcoY = null,
+                    wcoZ = null
+                )
             } else {
                 currentStatus.position
             }
@@ -120,6 +128,30 @@ class PendantCommandController(
                 "Connection lost during pendant operation. " +
                         "Controller mode is uncertain. Check the controller."
             )
+        }
+    }
+
+    /**
+     * Establish the controller's modal state on each Bluetooth connection.
+     * The keypad plugin consumes ordinary G-code while MPG is off, so briefly
+     * switch to the normal protocol stream to request $G, then return to
+     * keypad/listening mode before enabling jog controls.
+     */
+    fun initializeControllerState() {
+        if (!currentStatus.connected || stage != Stage.IDLE) return
+
+        controlStateUncertain = true
+        stage = Stage.WAITING_FOR_INITIAL_LISTENING
+        onBusyChanged(true)
+        onMessageChanged("Checking controller mode...")
+
+        if (!bluetooth.sendRealtime(0x87.toChar())) {
+            markControlUncertain("Could not request controller status.")
+            return
+        }
+
+        startTimeout(4000) {
+            markControlUncertain("Timed out checking controller mode.")
         }
     }
 
@@ -286,7 +318,8 @@ class PendantCommandController(
             axis = normalizedAxis,
             negative = distance < 0.0,
             distanceMm = toMillimeters(abs(distance), units),
-            feedRateMmMin = toMillimeters(feedRate, units),
+            feedRateMmMin = toMillimeters(feedRate, units)
+                .coerceAtMost(MAX_FEED_MM_MIN),
             mode = '2',
             continuous = false
         )
@@ -316,7 +349,8 @@ class PendantCommandController(
             axis = normalized[1],
             negative = normalized[0] == '-',
             distanceMm = CONTINUOUS_JOG_DISTANCE_MM,
-            feedRateMmMin = toMillimeters(feedRate, units),
+            feedRateMmMin = toMillimeters(feedRate, units)
+                .coerceAtMost(MAX_FEED_MM_MIN),
             mode = '0',
             continuous = true
         )
@@ -511,13 +545,16 @@ class PendantCommandController(
             return false
         }
 
-        val maximum = if (units == MachineUnits.MILLIMETERS) {
-            MAX_FEED_MM_MIN
-        } else {
-            MAX_FEED_MM_MIN / MM_PER_INCH
-        }
-
-        if (feedRate > maximum) {
+        // Compare in the controller's internal mm/min units. The inch slider
+        // endpoint is a Float, so its Double conversion can exceed the exact
+        // 2000/25.4 boundary by a few millionths.
+        val feedRateMmMin = toMillimeters(feedRate, units)
+        if (feedRateMmMin > MAX_FEED_MM_MIN + 0.001) {
+            val maximum = if (units == MachineUnits.MILLIMETERS) {
+                MAX_FEED_MM_MIN
+            } else {
+                MAX_FEED_MM_MIN / MM_PER_INCH
+            }
             onMessageChanged(
                 "Feed rate exceeds the pendant limit of " +
                         "${formatNumber(maximum)} ${unitName(units)}/min."
@@ -571,6 +608,34 @@ class PendantCommandController(
         }
 
         when (stage) {
+            Stage.WAITING_FOR_INITIAL_LISTENING -> {
+                if (currentStatus.pendantInControl == false) {
+                    cancelTimeout()
+                    stage = Stage.WAITING_FOR_INITIAL_CONTROL
+                    if (!bluetooth.sendRealtime(MPG_TOGGLE.toChar())) {
+                        markControlUncertain("Could not temporarily enable the protocol stream.")
+                        return
+                    }
+                    startTimeout(4000) {
+                        markControlUncertain("Controller did not confirm protocol-stream mode.")
+                    }
+                }
+            }
+
+            Stage.WAITING_FOR_INITIAL_CONTROL -> {
+                if (currentStatus.pendantInControl == true) {
+                    cancelTimeout()
+                    stage = Stage.WAITING_FOR_INITIAL_MODAL
+                    if (!bluetooth.sendCommand("\$G")) {
+                        releaseControl("Could not request controller modal state.")
+                        return
+                    }
+                    startTimeout(4000) {
+                        releaseControl("Timed out waiting for controller modal state.")
+                    }
+                }
+            }
+
             Stage.WAITING_FOR_CONTROL -> {
                 if (currentStatus.pendantInControl == true) {
                     cancelTimeout()
@@ -626,6 +691,13 @@ class PendantCommandController(
         )
 
         onStatusChanged(currentStatus)
+
+        if (stage == Stage.WAITING_FOR_INITIAL_MODAL &&
+            currentStatus.position.modalStateKnown
+        ) {
+            releaseControl("Controller units synchronized.")
+            return
+        }
 
         if (
             stage == Stage.WAITING_FOR_MODAL_REPORT &&
