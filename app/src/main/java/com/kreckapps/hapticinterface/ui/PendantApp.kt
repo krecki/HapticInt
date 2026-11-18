@@ -221,7 +221,13 @@ fun PendantApp() {
                             wasConnected = true
                             displayUnitsInitialized = false
                         }
-                        if (newStatus.position.modalStateKnown) {
+                        // Adopt controller units once after connecting.
+                        // Thereafter the display-units selector is user-owned;
+                        // ordinary status reports must not undo a manual choice.
+                        if (
+                            !displayUnitsInitialized &&
+                            newStatus.position.modalStateKnown
+                        ) {
                             displayUnits = newStatus.position.units
                             displayUnitsInitialized = true
                         }
