@@ -32,7 +32,7 @@ fun PendantApp() {
 
     // One shared feed rate, always stored internally in mm/min.
     var jogFeedRateMmMin by remember {
-        mutableFloatStateOf(50f)
+        mutableFloatStateOf(1000f)
     }
 
     // Continuous jogging settings
@@ -64,6 +64,10 @@ fun PendantApp() {
     }
 
     var setAxisAction by remember {
+        mutableStateOf<((Char, Double) -> Unit)?>(null)
+    }
+
+    var goToZeroAxisAction by remember {
         mutableStateOf<((Char, Double) -> Unit)?>(null)
     }
 
@@ -242,6 +246,10 @@ fun PendantApp() {
                     setAxisAction = action
                 },
 
+                onGoToZeroAxisActionAvailable = { action ->
+                    goToZeroAxisAction = action
+                },
+
                 onIncrementalJogActionAvailable = { action ->
                     incrementalJogAction = action
                 },
@@ -284,6 +292,9 @@ fun PendantApp() {
                 },
                 onSetAxis = { axis, value ->
                     setAxisAction?.invoke(axis, value)
+                },
+                onGoToZeroAxis = { axis ->
+                    goToZeroAxisAction?.invoke(axis, jogFeedRateMmMin.toDouble())
                 }
             )
 
