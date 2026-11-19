@@ -67,8 +67,8 @@ fun PendantApp() {
         mutableStateOf<((Char, Double) -> Unit)?>(null)
     }
 
-    var goToZeroAxisAction by remember {
-        mutableStateOf<((Char, Double) -> Unit)?>(null)
+    var moveAxisAction by remember {
+        mutableStateOf<((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?>(null)
     }
 
     var incrementalJogAction by remember {
@@ -246,8 +246,8 @@ fun PendantApp() {
                     setAxisAction = action
                 },
 
-                onGoToZeroAxisActionAvailable = { action ->
-                    goToZeroAxisAction = action
+                onMoveAxisActionAvailable = { action ->
+                    moveAxisAction = action
                 },
 
                 onIncrementalJogActionAvailable = { action ->
@@ -292,9 +292,6 @@ fun PendantApp() {
                 },
                 onSetAxis = { axis, value ->
                     setAxisAction?.invoke(axis, value)
-                },
-                onGoToZeroAxis = { axis ->
-                    goToZeroAxisAction?.invoke(axis, jogFeedRateMmMin.toDouble())
                 }
             )
 
@@ -332,6 +329,15 @@ fun PendantApp() {
                     stopActiveJog()
                     selectedMode = 2
                     configureSelectedJogMode(2)
+                }
+
+                ModeTab(
+                    text = "Move to Position",
+                    selected = selectedMode == 3,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    stopActiveJog()
+                    selectedMode = 3
                 }
             }
 
@@ -442,6 +448,26 @@ fun PendantApp() {
                     },
                     onJogCancel = {
                         stopJogAction?.invoke()
+                    }
+                )
+
+                3 -> MoveToPositionScreen(
+                    status = machineStatus,
+                    coordinateMode = coordinateDisplayMode,
+                    displayUnits = displayUnits,
+                    enabled = machineStatus.connected &&
+                            machineStatus.machineState == "Idle" &&
+                            machineStatus.pendantInControl == false &&
+                            !coordinateCommandBusy,
+                    onMove = { axis, target ->
+                        moveAxisAction?.invoke(
+                            axis, target, coordinateDisplayMode, displayUnits
+                        )
+                    },
+                    onMoveToZero = { axis ->
+                        moveAxisAction?.invoke(
+                            axis, 0.0, coordinateDisplayMode, displayUnits
+                        )
                     }
                 )
             }
