@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
-import java.util.Locale
 
 @Composable
 fun MoveToPositionScreen(
@@ -29,12 +28,6 @@ fun MoveToPositionScreen(
     } else {
         "Work coordinates (WPos · ${status.position.activeWcs})"
     }
-    val current = if (coordinateMode == CoordinateDisplayMode.MACHINE) {
-        listOf(status.position.machineX, status.position.machineY, status.position.machineZ)
-    } else {
-        listOf(status.position.workX, status.position.workY, status.position.workZ)
-    }
-
     val targets = remember { mutableStateMapOf('X' to "", 'Y' to "", 'Z' to "") }
 
     Column(
@@ -57,22 +50,7 @@ fun MoveToPositionScreen(
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(axis.toString(), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Current: " + String.format(
-                            Locale.US,
-                            "%.3f %s",
-                            if (displayUnits == MachineUnits.INCHES) current[index] / 25.4 else current[index],
-                            unitLabel
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(axis.toString(), style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(
                     value = targets[axis] ?: "",
                     onValueChange = { targets[axis] = it },
