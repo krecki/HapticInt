@@ -25,6 +25,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun PendantConnectionPanel(
+    modifier: Modifier = Modifier,
     onMachineStatusChanged: (MachineStatus) -> Unit,
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
@@ -285,7 +286,7 @@ fun PendantConnectionPanel(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
         .pointerInput(detailsExpanded) {
@@ -295,6 +296,7 @@ fun PendantConnectionPanel(
             }
         }
     ) {
+        if (detailsExpanded) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -370,6 +372,17 @@ fun PendantConnectionPanel(
                 }
             }
         }
+        } else {
+            Text(
+                "Swipe down · Connection controls",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
 
         if (detailsExpanded) {
         Spacer(modifier = Modifier.height(12.dp))
