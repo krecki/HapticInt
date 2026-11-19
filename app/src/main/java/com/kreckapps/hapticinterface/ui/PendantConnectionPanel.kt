@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,7 +36,8 @@ fun PendantConnectionPanel(
         (((String, Double, MachineUnits) -> Unit)?) -> Unit,
     onStopJogActionAvailable: ((() -> Unit)?) -> Unit,
     onJogModeConfigurationAvailable: (((Int, Double, Double) -> Unit)?) -> Unit,
-    onCommandBusyChanged: (Boolean) -> Unit
+    onCommandBusyChanged: (Boolean) -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -284,7 +287,13 @@ fun PendantConnectionPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            .padding(bottom = 8.dp)
+        .pointerInput(detailsExpanded) {
+            detectVerticalDragGestures { _, dragAmount ->
+                if (dragAmount > 8f) detailsExpanded = true
+                if (dragAmount < -8f) detailsExpanded = false
+            }
+        }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -355,6 +364,9 @@ fun PendantConnectionPanel(
                     onClick = { detailsExpanded = !detailsExpanded }
                 ) {
                     Text(if (detailsExpanded) "Hide" else "Controls")
+                }
+                TextButton(onClick = onSettingsClick) {
+                    Text("Settings")
                 }
             }
         }
