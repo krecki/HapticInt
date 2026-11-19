@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
+import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.DistanceMode
 import java.math.BigDecimal
 import kotlin.math.abs
@@ -37,6 +38,7 @@ class PendantCommandController(
         ZERO_AXIS,
         SET_AXIS,
         GO_TO_ZERO_AXIS,
+        GO_TO_POSITION,
         HOME_MACHINE
     }
     companion object {
@@ -69,6 +71,7 @@ class PendantCommandController(
     private var requestedValue: Double? = null
     private var requestedFeedRateMmMin: Double? = null
     private var originalDistanceMode: DistanceMode? = null
+    private var requestedCoordinateMode: CoordinateDisplayMode = CoordinateDisplayMode.WORK
 
     private var timeoutRunnable: Runnable? = null
     private var releaseMessage = ""
@@ -284,36 +287,51 @@ class PendantCommandController(
     }
 
     // ------------------------------------------------
-    // Move one work axis to zero using the app feed-rate setting
+    // Absolute rapid moves in the currently displayed coordinate system
     // ------------------------------------------------
 
-    fun goToWorkZero(axis: Char, feedRateMmMin: Double) {
+    fun moveAxisToPosition(
+        axis: Char,
+        target: Double,
+        coordinateMode: CoordinateDisplayMode,
+        displayUnits: MachineUnits
+    ) {
         val normalizedAxis = axis.uppercaseChar()
         if (normalizedAxis !in VALID_AXES) {
             onMessageChanged("Invalid axis.")
             return
         }
-        if (!feedRateMmMin.isFinite() || feedRateMmMin <= 0.0 ||
-            feedRateMmMin > MAX_FEED_MM_MIN + 0.001) {
-            onMessageChanged("Invalid Go-to-zero feed rate.")
+        if (!target.isFinite()) {
+            onMessageChanged("Please enter a valid target coordinate.")
             return
         }
         if (!canStartOperation()) return
-
-        val wcs = currentStatus.position.activeWcs
-        if (wcs !in VALID_WCS) {
+        if (!currentStatus.position.modalStateKnown ||
+            currentStatus.position.distanceMode == null
+        ) {
+            onMessageChanged("Controller modal state is not known. Synchronize before moving.")
+            return
+        }
+        if (coordinateMode == CoordinateDisplayMode.WORK &&
+            currentStatus.position.activeWcs !in VALID_WCS
+        ) {
             onMessageChanged("Active work coordinate system is invalid.")
             return
         }
 
-        operation = Operation.GO_TO_ZERO_AXIS
-        requestedWcs = wcs
+        operation = Operation.GO_TO_POSITION
+        requestedWcs = currentStatus.position.activeWcs
         requestedAxis = normalizedAxis
-        requestedValue = 0.0
-        requestedFeedRateMmMin = feedRateMmMin.coerceAtMost(MAX_FEED_MM_MIN)
-
-        beginControlHandover("Requesting pendant control to move $normalizedAxis to work zero...")
+        requestedValue = toMillimeters(target, displayUnits)
+        requestedCoordinateMode = coordinateMode
+        beginControlHandover("Requesting pendant control for $normalizedAxis rapid move...")
     }
+
+    fun moveAxisToZero(
+        axis: Char,
+        coordinateMode: CoordinateDisplayMode,
+        displayUnits: MachineUnits
+    ) = moveAxisToPosition(axis, 0.0, coordinateMode, displayUnits)
 
     // ------------------------------------------------
     // Home machine
@@ -737,7 +755,7 @@ class PendantCommandController(
         if (stage == Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT) {
             val mode = currentStatus.position.distanceMode
             if (mode == null) {
-                markControlUncertain("Controller did not report G90/G91. Go to zero was not started.")
+                markControlUncertain("Controller did not report G90/G91. Move was not started.")
             } else {
                 originalDistanceMode = mode
                 sendGoToZeroMove()
@@ -747,7 +765,7 @@ class PendantCommandController(
 
         if (stage == Stage.WAITING_FOR_DISTANCE_MODE_VERIFY) {
             if (currentStatus.position.distanceMode == DistanceMode.INCREMENTAL) {
-                releaseControl("Go-to-zero move completed; original G91 mode restored and verified.")
+                releaseControl("Rapid move completed; original G91 mode restored and verified.")
             } else {
                 markControlUncertain("Controller did not confirm restoration of G91. Check controller mode.")
             }
@@ -776,9 +794,9 @@ class PendantCommandController(
     // ------------------------------------------------
 
     private fun sendPendingCommand() {
-        if (operation == Operation.GO_TO_ZERO_AXIS) {
+        if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) {
             stage = Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT
-            onMessageChanged("Checking G90/G91 before moving to work zero...")
+            onMessageChanged("Checking G90/G91 before absolute rapid move...")
             if (!bluetooth.sendCommand("\$G")) {
                 releaseControl("Could not read the current G90/G91 mode. Go to zero was not started.")
                 return
@@ -804,7 +822,7 @@ class PendantCommandController(
 
             Operation.ZERO_AXIS,
             Operation.SET_AXIS,
-            Operation.GO_TO_ZERO_AXIS -> {
+            Operation.GO_TO_ZERO_AXIS, Operation.GO_TO_POSITION -> {
                 val wcs = requestedWcs ?: return
 
                 val pNumber = when (wcs) {
@@ -875,24 +893,31 @@ class PendantCommandController(
             releaseControl("No axis was selected.")
             return
         }
-        val feedMmMin = requestedFeedRateMmMin ?: run {
-            releaseControl("No feed rate was supplied.")
+        val targetMm = requestedValue ?: run {
+            releaseControl("No target coordinate was supplied.")
             return
         }
-        val feedInControllerUnits = if (
-            currentStatus.position.units == MachineUnits.INCHES
-        ) feedMmMin / MM_PER_INCH else feedMmMin
-        val formattedFeed = BigDecimal.valueOf(feedInControllerUnits)
-            .stripTrailingZeros()
-            .toPlainString()
+        val target = if (currentStatus.position.units == MachineUnits.INCHES) {
+            targetMm / MM_PER_INCH
+        } else targetMm
+        val coordinateCommand = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            "G53 G0 $axis${formatNumber(target)}"
+        } else {
+            "G0 $axis${formatNumber(target)}"
+        }
         stage = Stage.WAITING_FOR_COMMAND
-        onMessageChanged("Pendant has control. Moving $axis to work zero in G90...")
-        if (!bluetooth.sendCommand("G90 G1 $axis${formatNumber(0.0)} F$formattedFeed")) {
-            restoreDistanceModeOrMarkUncertain("Failed to send Go-to-zero move.")
+        val coordinateLabel = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            "machine"
+        } else {
+            "work (${requestedWcs})"
+        }
+        onMessageChanged("Pendant has control. Rapid moving $axis to ${formatNumber(target)} in $coordinateLabel coordinates...")
+        if (!bluetooth.sendCommand("G90 $coordinateCommand")) {
+            restoreDistanceModeOrMarkUncertain("Failed to send absolute rapid move.")
             return
         }
-        startTimeout(120000) {
-            markControlUncertain("Timed out waiting for Go-to-zero move. Controller mode and position need checking.")
+        startTimeout(600000) {
+            markControlUncertain("Timed out waiting for rapid move. Check position and G90/G91 before continuing.")
         }
     }
 
@@ -1004,8 +1029,8 @@ class PendantCommandController(
                     return
                 }
 
-                startTimeout(if (operation == Operation.GO_TO_ZERO_AXIS) 600000 else 4000) {
-                    if (operation == Operation.GO_TO_ZERO_AXIS) {
+                startTimeout(if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) 600000 else 4000) {
+                    if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) {
                         markControlUncertain("Timed out waiting for the Go-to-zero move to finish. Check position and G90/G91 before continuing.")
                     } else {
                         releaseControl(
@@ -1055,11 +1080,20 @@ class PendantCommandController(
         val axis = requestedAxis ?: return
         val expectedValue = requestedValue ?: return
 
-        val actualValue = when (axis) {
-            'X' -> currentStatus.position.workX
-            'Y' -> currentStatus.position.workY
-            'Z' -> currentStatus.position.workZ
-            else -> return
+        val actualValue = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            when (axis) {
+                'X' -> currentStatus.position.machineX
+                'Y' -> currentStatus.position.machineY
+                'Z' -> currentStatus.position.machineZ
+                else -> return
+            }
+        } else {
+            when (axis) {
+                'X' -> currentStatus.position.workX
+                'Y' -> currentStatus.position.workY
+                'Z' -> currentStatus.position.workZ
+                else -> return
+            }
         }
 
         // A G-code acknowledgement means the command was accepted, not that
@@ -1076,7 +1110,8 @@ class PendantCommandController(
             }
             val message = when (operation) {
                 Operation.ZERO_AXIS -> "$requestedWcs $axis successfully set to zero."
-                Operation.GO_TO_ZERO_AXIS -> "$axis reached $requestedWcs work zero."
+                Operation.GO_TO_ZERO_AXIS -> "$axis reached coordinate zero."
+                Operation.GO_TO_POSITION -> "$axis reached the requested position."
                 else -> "$requestedWcs $axis successfully set to $expectedValue."
             }
 
@@ -1137,7 +1172,7 @@ class PendantCommandController(
             if (operation == Operation.GO_TO_ZERO_AXIS &&
                 originalDistanceMode == DistanceMode.INCREMENTAL
             ) {
-                restoreDistanceModeOrMarkUncertain("Controller rejected the Go-to-zero move ($error).")
+                restoreDistanceModeOrMarkUncertain("Controller rejected the rapid move ($error).")
                 return
             }
             releaseControl(
@@ -1211,6 +1246,7 @@ class PendantCommandController(
         requestedValue = null
         requestedFeedRateMmMin = null
         originalDistanceMode = null
+        requestedCoordinateMode = CoordinateDisplayMode.WORK
         operation = null
         continuousJogActive = false
     }
