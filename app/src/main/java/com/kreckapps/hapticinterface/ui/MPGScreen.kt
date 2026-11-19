@@ -180,7 +180,7 @@ fun RotaryWheel(
 
     Box(
         modifier = Modifier
-            .size(210.dp)
+            .size(160.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(
