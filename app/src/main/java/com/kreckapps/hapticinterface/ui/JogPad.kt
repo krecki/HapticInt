@@ -40,12 +40,12 @@ fun JogPad(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row {
-                    Spacer(modifier = Modifier.width(62.dp))
+                    Spacer(modifier = Modifier.width(54.dp))
 
                     JogDirectionButton(
                         label = "+Y",
                         active = activeJog == "+Y",
-                        width = 62.dp,
+                        width = 54.dp,
                         holdToRun = holdToRun,
                         incremental = incremental,
                         onJogChanged = onJogChanged,
@@ -77,7 +77,7 @@ fun JogPad(
                                 onJogChanged(null)
                             }
                         },
-                        modifier = Modifier.size(62.dp, 60.dp),
+                        modifier = Modifier.size(54.dp, 48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
@@ -126,7 +126,7 @@ fun JogPad(
                 JogDirectionButton(
                     label = "+Z",
                     active = activeJog == "+Z",
-                    width = 56.dp,
+                    width = 48.dp,
                     holdToRun = holdToRun,
                     incremental = incremental,
                     onJogChanged = onJogChanged,
@@ -177,7 +177,7 @@ fun JogDirectionButton(
 
     Box(
         modifier = Modifier
-            .size(width, 60.dp)
+            .size(width, 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(backgroundColor)
             .border(
