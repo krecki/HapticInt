@@ -1102,10 +1102,10 @@ class PendantCommandController(
         if (currentStatus.machineState != "Idle") return
 
         if (abs(actualValue - expectedValue) <= POSITION_TOLERANCE) {
-            if (operation == Operation.GO_TO_ZERO_AXIS &&
+            if ((operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) &&
                 originalDistanceMode == DistanceMode.INCREMENTAL
             ) {
-                restoreDistanceModeOrMarkUncertain("$axis reached work zero.")
+                restoreDistanceModeOrMarkUncertain("$axis reached the requested coordinate.")
                 return
             }
             val message = when (operation) {
@@ -1169,7 +1169,7 @@ class PendantCommandController(
         }
 
         if (currentStatus.pendantInControl == true) {
-            if (operation == Operation.GO_TO_ZERO_AXIS &&
+            if ((operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) &&
                 originalDistanceMode == DistanceMode.INCREMENTAL
             ) {
                 restoreDistanceModeOrMarkUncertain("Controller rejected the rapid move ($error).")
