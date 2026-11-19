@@ -73,7 +73,7 @@ fun MPGScreen(
     ) {
         SectionTitle("Manual Pulse Generator")
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Axis",
@@ -86,7 +86,7 @@ fun MPGScreen(
             onSelected = onAxisChanged
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Distance per detent ($unitLabel)",
@@ -99,7 +99,7 @@ fun MPGScreen(
             onSelected = onResolutionChanged
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         RotaryWheel(
             position = position,
@@ -122,7 +122,7 @@ fun MPGScreen(
             onDragFinished = onJogCancel
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Axis: $axis",
@@ -146,7 +146,7 @@ fun MPGScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         OutlinedButton(
             onClick = { onPositionChanged(0) }
@@ -180,7 +180,7 @@ fun RotaryWheel(
 
     Box(
         modifier = Modifier
-            .size(160.dp)
+            .size(150.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(
