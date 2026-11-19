@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -112,31 +113,6 @@ fun MPGScreen(
             onDragFinished = onJogCancel
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Axis: $axis",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Position: $position detents",
-            fontSize = 16.sp
-        )
-
-        Text(
-            text = "Resolution: $displayedResolution $unitLabel / detent",
-            fontSize = 14.sp
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        OutlinedButton(
-            onClick = { onPositionChanged(0) }
-        ) {
-            Text("Reset Position")
-        }
     }
 }
 
@@ -246,7 +222,7 @@ fun RotaryWheel(
     ) {
         val tickColor = MaterialTheme.colorScheme.onSurface
 
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = position * (360f / safePulsesPerRev) }) {
             val center = Offset(
                 size.width / 2f,
                 size.height / 2f
@@ -289,26 +265,18 @@ fun RotaryWheel(
             }
         }
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "MPG",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = position.toString(),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = "DRAG TO TURN",
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2f
+            val top = 2.dp.toPx()
+            val bottom = 13.dp.toPx()
+            val half = 6.dp.toPx()
+            val marker = androidx.compose.ui.graphics.Path().apply {
+                moveTo(cx, bottom)
+                lineTo(cx - half, top)
+                lineTo(cx + half, top)
+                close()
+            }
+            drawPath(marker, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
