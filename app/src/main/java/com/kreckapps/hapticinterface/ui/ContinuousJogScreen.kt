@@ -44,19 +44,6 @@ fun ContinuousJogScreen(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionTitle("Continuous Jogging")
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = if (holdToRun) {
-                "Press and hold a direction to jog"
-            } else {
-                "Tap a direction to start or stop jogging"
-            },
-            fontSize = 14.sp
-        )
-
         Spacer(modifier = Modifier.height(6.dp))
 
         OptionButtons(
