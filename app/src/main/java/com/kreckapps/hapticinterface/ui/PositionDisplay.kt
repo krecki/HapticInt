@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -19,6 +20,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.snapshotFlow
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
@@ -55,6 +59,7 @@ fun PositionDisplay(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
 
     fun finishEditing() {
         val axis = editingAxis ?: return
@@ -87,6 +92,19 @@ fun PositionDisplay(
         if (editingAxis != null) {
             focusRequester.requestFocus()
             keyboard?.show()
+
+            // The Android keyboard's Back button can hide the IME without
+            // clearing field focus. Treat that dismissal as Set as well.
+            var keyboardWasVisible = false
+            snapshotFlow { WindowInsets.ime.getBottom(density) > 0 }
+                .distinctUntilChanged()
+                .collect { keyboardVisible ->
+                    if (keyboardVisible) {
+                        keyboardWasVisible = true
+                    } else if (keyboardWasVisible && editingAxis != null) {
+                        finishEditing()
+                    }
+                }
         }
     }
 
