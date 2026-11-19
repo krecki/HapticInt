@@ -2,6 +2,8 @@ package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,22 +49,12 @@ fun IncrementalJogScreen(
     }
 
     val safeFeedRate = feedRate.coerceIn(1f, maxFeedRate)
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionTitle("Incremental Jogging")
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Set the step size for each axis.",
-            fontSize = 13.sp
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -78,10 +70,12 @@ fun IncrementalJogScreen(
                     modifier = Modifier.weight(1f).height(58.dp),
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
-                    label = { Text("$axis ($unitLabel)", fontSize = 10.sp) },
+                    label = { Text("$axis ($unitLabel)", fontSize = 11.sp) },
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal
-                    )
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                 )
             }
         }
@@ -116,6 +110,7 @@ fun IncrementalJogScreen(
         JogPad(
             incremental = true,
             onIncrementalJog = { direction ->
+                focusManager.clearFocus()
                 val axis = direction.last()
                 val step = axisSteps[axis.toString()] ?: "0.01"
                 val stepValue = step.toDoubleOrNull()
@@ -148,6 +143,7 @@ fun IncrementalJogScreen(
                 }
             },
             onStop = {
+                focusManager.clearFocus()
                 onJogCancel()
                 onCommand("Jog cancel requested")
             }
