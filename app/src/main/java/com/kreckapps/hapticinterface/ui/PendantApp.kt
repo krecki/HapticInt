@@ -488,8 +488,10 @@ fun PendantApp() {
             }
         }
 
+        }
         Box(
             modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(if (wcsPanelExpanded) 116.dp else 26.dp)
                 .background(
