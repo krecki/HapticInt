@@ -61,20 +61,32 @@ fun IncrementalJogScreen(
             fontSize = 13.sp
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        for (axis in listOf("X", "Y", "Z")) {
-            AxisSettingsRow(
-                axis = axis,
-                step = axisSteps[axis] ?: "0.01",
-                unitLabel = unitLabel,
-                onStepChanged = {
-                    onStepChanged(axis, it)
-                }
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            for (axis in listOf("X", "Y", "Z")) {
+                OutlinedTextField(
+                    value = axisSteps[axis] ?: "0.01",
+                    onValueChange = { value ->
+                        if (value.matches(Regex("[0-9]*\\.?[0-9]*"))) {
+                            onStepChanged(axis, value)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(58.dp),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    label = { Text("$axis ($unitLabel)", fontSize = 10.sp) },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal
+                    )
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Shared Jog Feed Rate",
@@ -141,7 +153,7 @@ fun IncrementalJogScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Last command:",
