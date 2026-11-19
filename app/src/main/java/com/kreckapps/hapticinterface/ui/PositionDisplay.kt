@@ -60,6 +60,7 @@ fun PositionDisplay(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
 
     fun finishEditing() {
         val axis = editingAxis ?: return
@@ -96,7 +97,7 @@ fun PositionDisplay(
             // The Android keyboard's Back button can hide the IME without
             // clearing field focus. Treat that dismissal as Set as well.
             var keyboardWasVisible = false
-            snapshotFlow { WindowInsets.ime.getBottom(density) > 0 }
+            snapshotFlow { imeInsets.getBottom(density) > 0 }
                 .distinctUntilChanged()
                 .collect { keyboardVisible ->
                     if (keyboardVisible) {
