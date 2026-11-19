@@ -1013,7 +1013,8 @@ class PendantCommandController(
 
             Operation.ZERO_AXIS,
             Operation.SET_AXIS,
-            Operation.GO_TO_ZERO_AXIS -> {
+            Operation.GO_TO_ZERO_AXIS,
+            Operation.GO_TO_POSITION -> {
                 stage = Stage.WAITING_FOR_POSITION_REPORT
 
                 val axis = requestedAxis ?: '?'
@@ -1031,7 +1032,7 @@ class PendantCommandController(
 
                 startTimeout(if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) 600000 else 4000) {
                     if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) {
-                        markControlUncertain("Timed out waiting for the Go-to-zero move to finish. Check position and G90/G91 before continuing.")
+                        markControlUncertain("Timed out waiting for the rapid move to finish. Check position and G90/G91 before continuing.")
                     } else {
                         releaseControl(
                             "Timed out verifying the $axis coordinate."
