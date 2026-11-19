@@ -371,4 +371,3 @@ fun PendantConnectionPanel(
         }
     }
 }
-}
