@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -414,7 +415,7 @@ fun PendantApp() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+                    .background(Color.Black.copy(alpha = 0.42f))
                     .clickable {
                         wcsPanelExpanded = false
                         topPanelExpanded = false
@@ -494,10 +495,7 @@ fun PendantApp() {
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(if (wcsPanelExpanded) 116.dp else 26.dp)
-                .background(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
-                )
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .pointerInput(wcsPanelExpanded) {
                     detectVerticalDragGestures { _, dragAmount ->
                         if (dragAmount < -5f) wcsPanelExpanded = true
