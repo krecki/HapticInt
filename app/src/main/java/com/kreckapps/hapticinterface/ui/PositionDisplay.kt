@@ -37,8 +37,7 @@ fun PositionDisplay(
     onDisplayUnitsChanged: (MachineUnits) -> Unit,
     zeroXEnabled: Boolean,
     onZeroAxis: (Char) -> Unit,
-    onSetAxis: (Char, Double) -> Unit,
-    onGoToZeroAxis: (Char) -> Unit
+    onSetAxis: (Char, Double) -> Unit
 ) {
     val position = status.position
     val isWorkDisplay = displayMode == CoordinateDisplayMode.WORK
@@ -220,15 +219,6 @@ fun PositionDisplay(
                                 )
                             ) {
                                 Text("Zero", fontSize = 12.sp)
-                            }
-                            TextButton(
-                                onClick = { onGoToZeroAxis(axis) },
-                                enabled = zeroXEnabled,
-                                contentPadding = PaddingValues(
-                                    horizontal = 7.dp, vertical = 0.dp
-                                )
-                            ) {
-                                Text("Go", fontSize = 12.sp)
                             }
                         }
                     }
