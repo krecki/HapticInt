@@ -445,7 +445,15 @@ fun PendantApp() {
                             !displayUnitsInitialized &&
                             newStatus.position.modalStateKnown
                         ) {
-                            displayUnits = newStatus.position.units
+                            val controllerUnits = newStatus.position.units
+                            if (controllerUnits != displayUnits) {
+                                listOf("X", "Y", "Z").forEach { axis ->
+                                    if (axis !in customStepAxes) {
+                                        axisSteps[axis] = if (controllerUnits == MachineUnits.MILLIMETERS) "10" else "0.375"
+                                    }
+                                }
+                            }
+                            displayUnits = controllerUnits
                             displayUnitsInitialized = true
                         }
                     }
