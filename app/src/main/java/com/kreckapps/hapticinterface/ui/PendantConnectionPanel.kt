@@ -8,7 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.*
@@ -16,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.communication.PendantBluetoothManager
 import com.kreckapps.hapticinterface.communication.PendantCommandController
@@ -40,7 +38,8 @@ fun PendantConnectionPanel(
     onStopJogActionAvailable: ((() -> Unit)?) -> Unit,
     onJogModeConfigurationAvailable: (((Int, Double, Double) -> Unit)?) -> Unit,
     onCommandBusyChanged: (Boolean) -> Unit,
-    onSettingsClick: () -> Unit
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -79,11 +78,6 @@ fun PendantConnectionPanel(
         mutableStateOf(false)
     }
 
-    // Keep the connection controls out of the way while operating the pendant.
-    var detailsExpanded by remember {
-        mutableStateOf(false)
-    }
-    
     val commandController = remember(bluetoothManager) {
         PendantCommandController(
             bluetooth = bluetoothManager,
@@ -199,7 +193,7 @@ fun PendantConnectionPanel(
 
                     when (state) {
                         PendantBluetoothManager.ConnectionState.CONNECTED -> {
-                            detailsExpanded = false
+                            onExpandedChange(false)
                             commandController.updateConnection(true)
 
                             // Synchronize units/modal state through the
@@ -209,7 +203,7 @@ fun PendantConnectionPanel(
 
                         PendantBluetoothManager.ConnectionState.DISCONNECTED,
                         PendantBluetoothManager.ConnectionState.ERROR -> {
-                            detailsExpanded = true
+                            onExpandedChange(false)
                             commandController.updateConnection(false)
                         }
 
@@ -290,128 +284,91 @@ fun PendantConnectionPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)
-            )
-            .padding(bottom = 8.dp)
-            .pointerInput(detailsExpanded) {
-            detectVerticalDragGestures { _, dragAmount ->
-                if (dragAmount > 8f) detailsExpanded = true
-                if (dragAmount < -8f) detailsExpanded = false
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(bottom = if (expanded) 8.dp else 0.dp)
+            .pointerInput(expanded) {
+                detectVerticalDragGestures { _, dragAmount ->
+                    if (dragAmount > 8f) onExpandedChange(true)
+                    if (dragAmount < -8f) onExpandedChange(false)
+                }
             }
-        }
     ) {
-        if (detailsExpanded) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        if (expanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (connectionState) {
+                    PendantBluetoothManager.ConnectionState.CONNECTING -> {
+                        OutlinedButton(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Connecting…") }
+                    }
+                    PendantBluetoothManager.ConnectionState.CONNECTED -> {
+                        OutlinedButton(
+                            onClick = { connectOrDisconnect() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Disconnect") }
+                    }
+                    else -> {
+                        Button(
+                            onClick = { connectOrDisconnect() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Connect") }
+                    }
+                }
+                Button(
+                    onClick = { commandController.homeMachine() },
+                    enabled = true,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Home Machine") }
+            }
+
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 44.dp, max = 44.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = connectionMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
                 Text(
                     text = when {
-                        !currentStatus.connected ->
-                            "Pendant mode: Not connected"
-                        currentStatus.pendantInControl == true ->
-                            "Pendant mode: In control"
-                        currentStatus.pendantInControl == false ->
-                            "Pendant mode: Listening"
-                        else ->
-                            "Pendant mode: Waiting for controller..."
+                        !currentStatus.connected -> "Pendant mode: Not connected"
+                        currentStatus.pendantInControl == true -> "Pendant mode: In control"
+                        currentStatus.pendantInControl == false -> "Pendant mode: Listening"
+                        else -> "Pendant mode: Waiting for controller…"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                when (connectionState) {
-                PendantBluetoothManager.ConnectionState.CONNECTING -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                if (commandBusy) {
+                    Text(
+                        "Pendant operation in progress…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                PendantBluetoothManager.ConnectionState.CONNECTED -> {
-                    OutlinedButton(
-                        onClick = {
-                            connectOrDisconnect()
-                        }
-                    ) {
-                        Text("Disconnect")
-                    }
-                }
-
-                else -> {
-                    Button(
-                        onClick = {
-                            connectOrDisconnect()
-                        }
-                    ) {
-                        Text("Connect")
-                    }
-                }
-                }
-                TextButton(
-                    onClick = { detailsExpanded = !detailsExpanded }
-                ) {
-                    Text(if (detailsExpanded) "Hide" else "Controls")
-                }
-                TextButton(onClick = onSettingsClick) {
-                    Text("Settings")
-                }
             }
-        }
         } else {
             Text(
                 "Swipe down · Connection controls",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(34.dp),
+                    .height(34.dp)
+                    .clickable { onExpandedChange(true) },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-        }
-
-
-        if (detailsExpanded) {
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                commandController.homeMachine()
-            },
-            enabled = true,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Home Machine")
-        }
-
-        if (commandBusy) {
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Pendant operation in progress...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
         }
     }
+}
 }
