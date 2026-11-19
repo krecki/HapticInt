@@ -27,10 +27,11 @@ fun ModeTab(
             contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
             Text(
-                text,
+                text = text,
                 modifier = Modifier.fillMaxWidth(),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
+            )
         }
     } else {
         OutlinedButton(
@@ -40,10 +41,11 @@ fun ModeTab(
             contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
             Text(
-                text,
+                text = text,
                 modifier = Modifier.fillMaxWidth(),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
+            )
         }
     }
 }
