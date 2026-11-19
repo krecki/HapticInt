@@ -332,7 +332,7 @@ fun PendantApp() {
                 }
 
                 ModeTab(
-                    text = "Move to Position",
+                    text = "Position",
                     selected = selectedMode == 3,
                     modifier = Modifier.weight(1f)
                 ) {
