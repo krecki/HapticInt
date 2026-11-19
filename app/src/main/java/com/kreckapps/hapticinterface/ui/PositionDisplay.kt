@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +56,7 @@ fun PositionDisplay(
     val unitLabel = if (displayUnits == MachineUnits.INCHES) "in" else "mm"
 
     var editingAxis by remember { mutableStateOf<Char?>(null) }
-    var editText by remember { mutableStateOf("") }
+    var editText by remember { mutableStateOf(TextFieldValue("")) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -63,7 +65,7 @@ fun PositionDisplay(
 
     fun finishEditing() {
         val axis = editingAxis ?: return
-        val entered = editText.toDoubleOrNull()
+        val entered = editText.text.toDoubleOrNull()
         if (entered != null && entered.isFinite()) {
             // Convert display units to millimeters, then to the controller's
             // current G20/G21 units because G10 L20 uses modal units.
@@ -191,9 +193,8 @@ fun PositionDisplay(
                             modifier = Modifier
                                 .clickable(enabled = isWorkDisplay && zeroXEnabled) {
                                     editingAxis = axis
-                                    editText = String.format(
-                                        Locale.US, "%.3f", coordinates[index]
-                                    )
+                                    val initialText = String.format(Locale.US, "%.3f", coordinates[index])
+                                    editText = TextFieldValue(initialText, selection = TextRange(0, initialText.length))
                                 }
                                 .padding(vertical = 4.dp),
                             fontSize = 19.sp,
