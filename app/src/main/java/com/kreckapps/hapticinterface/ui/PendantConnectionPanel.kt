@@ -378,11 +378,7 @@ fun PendantConnectionPanel(
             onClick = {
                 commandController.homeMachine()
             },
-            enabled =
-            currentStatus.connected &&
-                    currentStatus.machineState == "Idle" &&
-                    currentStatus.pendantInControl == false &&
-                    !commandBusy,
+            enabled = true,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Home Machine")
