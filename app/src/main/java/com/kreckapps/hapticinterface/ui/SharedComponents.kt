@@ -2,11 +2,13 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -21,17 +23,27 @@ fun ModeTab(
         Button(
             onClick = onClick,
             modifier = modifier.height(48.dp),
+            shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
-            Text(text, fontSize = 12.sp)
+            Text(
+                text,
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
         }
     } else {
         OutlinedButton(
             onClick = onClick,
             modifier = modifier.height(48.dp),
+            shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
-            Text(text, fontSize = 12.sp)
+            Text(
+                text,
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
         }
     }
 }
