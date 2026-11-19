@@ -10,6 +10,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
@@ -32,7 +35,8 @@ fun MoveToPositionScreen(
         "Work coordinates (WPos · ${status.position.activeWcs})"
     }
     val focusManager = LocalFocusManager.current
-    val targets = remember { mutableStateMapOf('X' to "", 'Y' to "", 'Z' to "") }
+    val targets = remember { mutableStateMapOf('X' to "0", 'Y' to "0", 'Z' to "0") }
+    val targetFields = remember { mutableStateMapOf<Char, TextFieldValue>() }
 
     Column(
         modifier = Modifier
@@ -49,9 +53,17 @@ fun MoveToPositionScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 OutlinedTextField(
-                    value = targets[axis] ?: "",
-                    onValueChange = { targets[axis] = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    value = targetFields[axis] ?: TextFieldValue(targets[axis] ?: "0"),
+                    onValueChange = {
+                        targetFields[axis] = it
+                        targets[axis] = it.text
+                    },
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { state ->
+                        if (state.isFocused) {
+                            val current = targets[axis] ?: "0"
+                            targetFields[axis] = TextFieldValue(current, selection = TextRange(0, current.length))
+                        }
+                    },
                     singleLine = true,
                     label = { Text("$axis ($unitLabel)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
