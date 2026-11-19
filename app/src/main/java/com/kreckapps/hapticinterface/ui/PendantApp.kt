@@ -105,11 +105,12 @@ fun PendantApp() {
     // Incremental jogging step sizes remain independent per axis.
     val axisSteps = remember {
         mutableStateMapOf(
-            "X" to "0.01",
-            "Y" to "0.01",
-            "Z" to "0.01"
+            "X" to "0.375",
+            "Y" to "0.375",
+            "Z" to "0.375"
         )
     }
+    val customStepAxes = remember { mutableStateListOf<String>() }
 
     var lastIncrementalCommand by remember {
         mutableStateOf("No jog command yet")
@@ -198,6 +199,11 @@ fun PendantApp() {
                 },
                 displayUnits = displayUnits,
                 onDisplayUnitsChanged = {
+                    if (it != displayUnits) {
+                        listOf("X", "Y", "Z").forEach { axis ->
+                            if (axis !in customStepAxes) axisSteps[axis] = if (it == MachineUnits.MILLIMETERS) "10" else "0.375"
+                        }
+                    }
                     displayUnits = it
                     displayUnitsInitialized = true
                 },
@@ -355,6 +361,7 @@ fun PendantApp() {
                     lastCommand = lastIncrementalCommand,
                     onStepChanged = { axis, value ->
                         axisSteps[axis] = value
+                        if (axis !in customStepAxes) customStepAxes.add(axis)
                         if (selectedMode == 2) {
                             val step = value.toDoubleOrNull()
                             if (step != null && step > 0.0) {
