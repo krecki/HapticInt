@@ -94,7 +94,6 @@ fun MPGScreen(
 
         RotaryWheel(
             position = position,
-            pulsesPerRev = 20,
             onPositionChanged = onPositionChanged,
             onDetent = { direction ->
                 val distance = displayedResolution.toDoubleOrNull()
