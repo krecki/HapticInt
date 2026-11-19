@@ -4,8 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -60,14 +64,24 @@ fun IncrementalJogScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             for (axis in listOf("X", "Y", "Z")) {
+                var fieldValue by remember(axis) {
+                    mutableStateOf(TextFieldValue(axisSteps[axis] ?: if (displayUnits == MachineUnits.MILLIMETERS) "10" else "0.375"))
+                }
+                LaunchedEffect(axisSteps[axis]) {
+                    val externalValue = axisSteps[axis]
+                    if (externalValue != null && externalValue != fieldValue.text) fieldValue = TextFieldValue(externalValue)
+                }
                 OutlinedTextField(
-                    value = axisSteps[axis] ?: "0.01",
+                    value = fieldValue,
                     onValueChange = { value ->
-                        if (value.matches(Regex("[0-9]*\\.?[0-9]*"))) {
-                            onStepChanged(axis, value)
+                        if (value.text.matches(Regex("[0-9]*\\.?[0-9]*"))) {
+                            fieldValue = value
+                            onStepChanged(axis, value.text)
                         }
                     },
-                    modifier = Modifier.weight(1f).height(58.dp),
+                    modifier = Modifier.weight(1f).height(58.dp).onFocusChanged { state ->
+                        if (state.isFocused) fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
+                    },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
                     label = { Text("$axis ($unitLabel)", fontSize = 11.sp) },
@@ -115,7 +129,7 @@ fun IncrementalJogScreen(
             onIncrementalJog = { direction ->
                 focusManager.clearFocus()
                 val axis = direction.last()
-                val step = axisSteps[axis.toString()] ?: "0.01"
+                val step = axisSteps[axis.toString()] ?: if (displayUnits == MachineUnits.MILLIMETERS) "10" else "0.375"
                 val stepValue = step.toDoubleOrNull()
 
                 if (
@@ -152,18 +166,6 @@ fun IncrementalJogScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Last command:",
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            text = lastCommand,
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
     }
 }
 
