@@ -46,7 +46,7 @@ fun ContinuousJogScreen(
     ) {
         SectionTitle("Continuous Jogging")
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = if (holdToRun) {
@@ -57,7 +57,7 @@ fun ContinuousJogScreen(
             fontSize = 14.sp
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         OptionButtons(
             options = listOf("Hold to Run", "Tap to Toggle"),
@@ -72,7 +72,7 @@ fun ContinuousJogScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Shared Jog Feed Rate",
@@ -97,7 +97,7 @@ fun ContinuousJogScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         JogPad(
             activeJog = activeJog,
@@ -117,7 +117,7 @@ fun ContinuousJogScreen(
             holdToRun = holdToRun
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = if (activeJog == null) {
