@@ -28,7 +28,6 @@ import kotlin.math.sin
 fun MPGScreen(
     position: Int,
     onPositionChanged: (Int) -> Unit,
-    pulsesPerRev: Int,
     resolution: String,
     onResolutionChanged: (String) -> Unit,
     axis: String,
@@ -71,14 +70,6 @@ fun MPGScreen(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionTitle("Manual Pulse Generator")
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Axis",
-            fontWeight = FontWeight.SemiBold
-        )
 
         OptionButtons(
             options = listOf("X", "Y", "Z"),
@@ -103,7 +94,7 @@ fun MPGScreen(
 
         RotaryWheel(
             position = position,
-            pulsesPerRev = pulsesPerRev,
+            pulsesPerRev = 20,
             onPositionChanged = onPositionChanged,
             onDetent = { direction ->
                 val distance = displayedResolution.toDoubleOrNull()
@@ -140,12 +131,6 @@ fun MPGScreen(
             fontSize = 14.sp
         )
 
-        Text(
-            text = "$pulsesPerRev detents per revolution",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
         Spacer(modifier = Modifier.height(6.dp))
 
         OutlinedButton(
@@ -159,7 +144,6 @@ fun MPGScreen(
 @Composable
 fun RotaryWheel(
     position: Int,
-    pulsesPerRev: Int,
     onPositionChanged: (Int) -> Unit,
     onDetent: (Int) -> Unit,
     onDragFinished: () -> Unit
@@ -175,7 +159,7 @@ fun RotaryWheel(
         mutableFloatStateOf(0f)
     }
 
-    val safePulsesPerRev = pulsesPerRev.coerceAtLeast(1)
+    val safePulsesPerRev = 20
     val detentAngle = (2f * PI.toFloat()) / safePulsesPerRev
 
     Box(
