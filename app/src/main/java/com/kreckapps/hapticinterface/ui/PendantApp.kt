@@ -184,7 +184,7 @@ fun PendantApp() {
         modifier = Modifier
             .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 6.dp)
     ) {
         if (settingsOpen) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -200,91 +200,7 @@ fun PendantApp() {
                 }
             )
         } else {
-            PendantConnectionPanel(
-                onSettingsClick = {
-                    stopActiveJog()
-                    settingsOpen = true
-                },
-                onMachineStatusChanged = { newStatus ->
-                    machineStatus = newStatus
 
-                    if (!newStatus.connected) {
-                        wasConnected = false
-                        displayUnitsInitialized = false
-                    } else {
-                        if (!wasConnected) {
-                            wasConnected = true
-                            displayUnitsInitialized = false
-                        }
-                        // Adopt controller units once after connecting.
-                        // Thereafter the display-units selector is user-owned;
-                        // ordinary status reports must not undo a manual choice.
-                        if (
-                            !displayUnitsInitialized &&
-                            newStatus.position.modalStateKnown
-                        ) {
-                            displayUnits = newStatus.position.units
-                            displayUnitsInitialized = true
-                        }
-                    }
-                },
-
-                onZeroAxisActionAvailable = { action ->
-                    zeroAxisAction = action
-                },
-
-                onSetAxisActionAvailable = { action ->
-                    setAxisAction = action
-                },
-
-                onMoveAxisActionAvailable = { action ->
-                    moveAxisAction = action
-                },
-
-                onSelectWcsActionAvailable = { action ->
-                    selectWcsAction = action
-                },
-
-                onIncrementalJogActionAvailable = { action ->
-                    incrementalJogAction = action
-                },
-
-                onContinuousJogStartActionAvailable = { action ->
-                    continuousJogStartAction = action
-                },
-
-                onStopJogActionAvailable = { action ->
-                    stopJogAction = action
-                },
-
-                onJogModeConfigurationAvailable = { action ->
-                    jogModeConfigurationAction = action
-                },
-
-                onCommandBusyChanged = { busy ->
-                    coordinateCommandBusy = busy
-                }
-            )
-
-            PositionDisplay(
-                status = machineStatus,
-                displayMode = coordinateDisplayMode,
-                onDisplayModeChanged = {
-                    coordinateDisplayMode = it
-                },
-                displayUnits = displayUnits,
-                onDisplayUnitsChanged = {
-                    displayUnits = it
-                    displayUnitsInitialized = true
-                },
-                zeroXEnabled = !coordinateCommandBusy,
-                onZeroAxis = { axis ->
-                    zeroAxisAction?.invoke(axis)
-                },
-                onSetAxis = { axis, value ->
-                    setAxisAction?.invoke(axis, value)
-                }
-            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -489,6 +405,93 @@ fun PendantApp() {
         }
 
         }
+        PendantConnectionPanel(
+            modifier = Modifier.align(Alignment.TopCenter),
+                onSettingsClick = {
+                    stopActiveJog()
+                    settingsOpen = true
+                },
+                onMachineStatusChanged = { newStatus ->
+                    machineStatus = newStatus
+
+                    if (!newStatus.connected) {
+                        wasConnected = false
+                        displayUnitsInitialized = false
+                    } else {
+                        if (!wasConnected) {
+                            wasConnected = true
+                            displayUnitsInitialized = false
+                        }
+                        // Adopt controller units once after connecting.
+                        // Thereafter the display-units selector is user-owned;
+                        // ordinary status reports must not undo a manual choice.
+                        if (
+                            !displayUnitsInitialized &&
+                            newStatus.position.modalStateKnown
+                        ) {
+                            displayUnits = newStatus.position.units
+                            displayUnitsInitialized = true
+                        }
+                    }
+                },
+
+                onZeroAxisActionAvailable = { action ->
+                    zeroAxisAction = action
+                },
+
+                onSetAxisActionAvailable = { action ->
+                    setAxisAction = action
+                },
+
+                onMoveAxisActionAvailable = { action ->
+                    moveAxisAction = action
+                },
+
+                onSelectWcsActionAvailable = { action ->
+                    selectWcsAction = action
+                },
+
+                onIncrementalJogActionAvailable = { action ->
+                    incrementalJogAction = action
+                },
+
+                onContinuousJogStartActionAvailable = { action ->
+                    continuousJogStartAction = action
+                },
+
+                onStopJogActionAvailable = { action ->
+                    stopJogAction = action
+                },
+
+                onJogModeConfigurationAvailable = { action ->
+                    jogModeConfigurationAction = action
+                },
+
+                onCommandBusyChanged = { busy ->
+                    coordinateCommandBusy = busy
+                }
+            )
+
+            PositionDisplay(
+                status = machineStatus,
+                displayMode = coordinateDisplayMode,
+                onDisplayModeChanged = {
+                    coordinateDisplayMode = it
+                },
+                displayUnits = displayUnits,
+                onDisplayUnitsChanged = {
+                    displayUnits = it
+                    displayUnitsInitialized = true
+                },
+                zeroXEnabled = !coordinateCommandBusy,
+                onZeroAxis = { axis ->
+                    zeroAxisAction?.invoke(axis)
+                },
+                onSetAxis = { axis, value ->
+                    setAxisAction?.invoke(axis, value)
+                }
+            )
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
