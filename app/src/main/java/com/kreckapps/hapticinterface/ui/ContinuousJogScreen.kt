@@ -10,6 +10,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
 import com.kreckapps.hapticinterface.model.MachineUnits
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 
 private const val MAX_CONTINUOUS_FEED_MM_MIN = 2000f
 private const val MM_PER_INCH = 25.4f
@@ -61,28 +64,40 @@ fun ContinuousJogScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        Text(
-            text = "Shared Jog Feed Rate",
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .padding(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Feed Rate: ",
+                    fontWeight = FontWeight.Light
+                )
 
-        Text(
-            text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+                Text(
+                    text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Light
+                )
 
-        Slider(
-            value = safeSpeed,
-            onValueChange = onSpeedChanged,
-            valueRange = 1f..maxFeedRate
-        )
+            }
 
-        Text(
-            text = "Maximum: ${String.format(Locale.US, "%.1f", maxFeedRate)} $unitLabel",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            Slider(
+                value = safeSpeed,
+                onValueChange = onSpeedChanged,
+                valueRange = 1f..maxFeedRate
+            )
+        }
 
         Spacer(modifier = Modifier.height(6.dp))
 

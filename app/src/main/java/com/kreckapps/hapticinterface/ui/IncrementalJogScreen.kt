@@ -1,3 +1,4 @@
+
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
@@ -16,8 +17,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.withFrameNanos
 import java.util.Locale
 import com.kreckapps.hapticinterface.model.MachineUnits
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 
 private const val MAX_FEED_MM_MIN = 2000f
 private const val MM_PER_INCH = 25.4f
@@ -64,63 +69,123 @@ fun IncrementalJogScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             for (axis in listOf("X", "Y", "Z")) {
+
                 var fieldValue by remember(axis) {
-                    mutableStateOf(TextFieldValue(axisSteps[axis] ?: if (displayUnits == MachineUnits.MILLIMETERS) "10" else "0.375"))
+                    mutableStateOf(
+                        TextFieldValue(
+                            axisSteps[axis]
+                                ?: if (displayUnits == MachineUnits.MILLIMETERS)
+                                    "10"
+                                else
+                                    "0.375"
+                        )
+                    )
                 }
+
+                // Track focus so selection can happen after the next frame
+                var hasFocus by remember(axis) {
+                    mutableStateOf(false)
+                }
+
+                // Synchronize with external value changes
                 LaunchedEffect(axisSteps[axis]) {
                     val externalValue = axisSteps[axis]
-                    if (externalValue != null && externalValue != fieldValue.text) fieldValue = TextFieldValue(externalValue)
+
+                    if (externalValue != null &&
+                        externalValue != fieldValue.text
+                    ) {
+                        fieldValue = TextFieldValue(externalValue)
+                    }
                 }
+
+                // Select all text after the focus event has completed
+                LaunchedEffect(hasFocus) {
+                    if (hasFocus) {
+                        withFrameNanos { }
+
+                        fieldValue = fieldValue.copy(
+                            selection = TextRange(
+                                0,
+                                fieldValue.text.length
+                            )
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = fieldValue,
                     onValueChange = { value ->
-                        if (value.text.matches(Regex("[0-9]*\\.?[0-9]*"))) {
+                        if (value.text.matches(
+                                Regex("[0-9]*\\.?[0-9]*")
+                            )
+                        ) {
                             fieldValue = value
                             onStepChanged(axis, value.text)
                         }
                     },
-                    modifier = Modifier.weight(1f).height(58.dp).onFocusChanged { state ->
-                        if (state.isFocused) fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
-                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(58.dp)
+                        .onFocusChanged { state ->
+                            hasFocus = state.isFocused
+                        },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
-                    label = { Text("$axis ($unitLabel)", fontSize = 11.sp) },
+                    label = {
+                        Text("$axis ($unitLabel)", fontSize = 11.sp)
+                    },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = androidx.compose.ui.text.input.ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                        }
+                    )
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        Text(
-            text = "Shared Jog Feed Rate",
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .padding(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Feed Rate: ",
+                    fontWeight = FontWeight.Light
+                )
 
-        Text(
-            text = "${String.format(Locale.US, "%.1f", safeFeedRate)} $feedUnit",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+                Text(
+                    text = "${String.format(Locale.US, "%.1f", safeFeedRate)} $feedUnit",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Light
+                )
 
-        Slider(
-            value = safeFeedRate,
-            onValueChange = { value ->
-                focusManager.clearFocus()
-                onFeedRateChanged(value)
-            },
-            valueRange = 1f..maxFeedRate
-        )
+            }
 
-        Text(
-            text = "Maximum: ${String.format(Locale.US, "%.1f", maxFeedRate)} $feedUnit",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            Slider(
+                value = safeFeedRate,
+                onValueChange = { value ->
+                    focusManager.clearFocus()
+                    onFeedRateChanged(value)
+                },
+                valueRange = 1f..maxFeedRate
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -128,8 +193,14 @@ fun IncrementalJogScreen(
             incremental = true,
             onIncrementalJog = { direction ->
                 focusManager.clearFocus()
+
                 val axis = direction.last()
-                val step = axisSteps[axis.toString()] ?: if (displayUnits == MachineUnits.MILLIMETERS) "10" else "0.375"
+                val step = axisSteps[axis.toString()]
+                    ?: if (displayUnits == MachineUnits.MILLIMETERS)
+                        "10"
+                    else
+                        "0.375"
+
                 val stepValue = step.toDoubleOrNull()
 
                 if (
@@ -165,7 +236,6 @@ fun IncrementalJogScreen(
                 onCommand("Jog cancel requested")
             }
         )
-
     }
 }
 
@@ -176,6 +246,35 @@ fun AxisSettingsRow(
     unitLabel: String,
     onStepChanged: (String) -> Unit
 ) {
+    var fieldValue by remember {
+        mutableStateOf(TextFieldValue(step))
+    }
+
+    var hasFocus by remember {
+        mutableStateOf(false)
+    }
+
+    // Keep the text field synchronized with external changes
+    LaunchedEffect(step) {
+        if (step != fieldValue.text) {
+            fieldValue = TextFieldValue(step)
+        }
+    }
+
+    // Select all text after the focus event has completed
+    LaunchedEffect(hasFocus) {
+        if (hasFocus) {
+            withFrameNanos { }
+
+            fieldValue = fieldValue.copy(
+                selection = TextRange(
+                    0,
+                    fieldValue.text.length
+                )
+            )
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,13 +290,21 @@ fun AxisSettingsRow(
             )
 
             OutlinedTextField(
-                value = step,
+                value = fieldValue,
                 onValueChange = { newValue ->
-                    if (newValue.matches(Regex("[0-9]*\\.?[0-9]*"))) {
-                        onStepChanged(newValue)
+                    if (newValue.text.matches(
+                            Regex("[0-9]*\\.?[0-9]*")
+                        )
+                    ) {
+                        fieldValue = newValue
+                        onStepChanged(newValue.text)
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { state ->
+                        hasFocus = state.isFocused
+                    },
                 label = {
                     Text("Step size ($unitLabel)")
                 },
