@@ -6,9 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +27,7 @@ fun PendantConnectionPanel(
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
     onMoveAxisActionAvailable: (((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?) -> Unit,
+    onSelectWcsActionAvailable: (((String) -> Unit)?) -> Unit,
     onIncrementalJogActionAvailable:
         (((Char, Double, Double, MachineUnits) -> Unit)?) -> Unit,
     onContinuousJogStartActionAvailable:
@@ -43,6 +42,7 @@ fun PendantConnectionPanel(
     val latestZeroAxisCallback = rememberUpdatedState(onZeroAxisActionAvailable)
     val latestSetAxisCallback = rememberUpdatedState(onSetAxisActionAvailable)
     val latestMoveAxisCallback = rememberUpdatedState(onMoveAxisActionAvailable)
+    val latestSelectWcsCallback = rememberUpdatedState(onSelectWcsActionAvailable)
     val latestIncrementalJogCallback =
         rememberUpdatedState(onIncrementalJogActionAvailable)
     val latestContinuousJogCallback =
@@ -75,7 +75,7 @@ fun PendantConnectionPanel(
 
     // Keep the connection controls out of the way while operating the pendant.
     var detailsExpanded by remember {
-        mutableStateOf(true)
+        mutableStateOf(false)
     }
     
     val commandController = remember(bluetoothManager) {
@@ -114,6 +114,10 @@ fun PendantConnectionPanel(
         { axis: Char, target: Double, mode: CoordinateDisplayMode, units: MachineUnits ->
             commandController.moveAxisToPosition(axis, target, mode, units)
         }
+    }
+
+    val selectWcsAction = remember(commandController) {
+        { wcs: String -> commandController.selectWorkCoordinateSystem(wcs) }
     }
 
     // Publish the incremental jog action.
@@ -156,6 +160,7 @@ fun PendantConnectionPanel(
         latestZeroAxisCallback.value(zeroAxisAction)
         latestSetAxisCallback.value(setAxisAction)
         latestMoveAxisCallback.value(moveAxisAction)
+        latestSelectWcsCallback.value(selectWcsAction)
         latestIncrementalJogCallback.value(incrementalJogAction)
         latestContinuousJogCallback.value(continuousJogStartAction)
         latestStopJogCallback.value(stopJogAction)
@@ -217,6 +222,7 @@ fun PendantConnectionPanel(
             latestZeroAxisCallback.value(null)
             latestSetAxisCallback.value(null)
             latestMoveAxisCallback.value(null)
+            latestSelectWcsCallback.value(null)
             latestIncrementalJogCallback.value(null)
             latestContinuousJogCallback.value(null)
             latestStopJogCallback.value(null)
@@ -354,40 +360,6 @@ fun PendantConnectionPanel(
         }
 
         if (detailsExpanded) {
-        // Work Coordinate System Selector
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "Active Work Coordinate System",
-            style = MaterialTheme.typography.titleSmall
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf("G54", "G55", "G56", "G57", "G58", "G59").forEach { wcs ->
-                FilterChip(
-                    selected = currentStatus.position.activeWcs == wcs,
-                    enabled =
-                    currentStatus.connected &&
-                            currentStatus.machineState == "Idle" &&
-                            currentStatus.pendantInControl == false &&
-                            !commandBusy,
-                    onClick = {
-                        commandController.selectWorkCoordinateSystem(wcs)
-                    },
-                    label = {
-                        Text(wcs)
-                    }
-                )
-            }
-        }
-
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
