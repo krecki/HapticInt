@@ -265,6 +265,12 @@ fun RotaryWheel(
             }
         }
 
+        Text(
+            text = "MPG",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2f
             val top = 2.dp.toPx()
