@@ -1,9 +1,11 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
@@ -23,6 +25,7 @@ private const val MAX_FEED_MM_MIN = 2000f
 fun PendantApp() {
     var selectedMode by remember { mutableIntStateOf(0) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var wcsPanelExpanded by remember { mutableStateOf(false) }
 
     // MPG settings and state
     var pulsesPerRev by remember { mutableIntStateOf(50) }
@@ -66,6 +69,8 @@ fun PendantApp() {
     var setAxisAction by remember {
         mutableStateOf<((Char, Double) -> Unit)?>(null)
     }
+
+    var selectWcsAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
 
     var moveAxisAction by remember {
         mutableStateOf<((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?>(null)
@@ -178,32 +183,14 @@ fun PendantApp() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
+                .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "CNC Pendant",
-                fontSize = 25.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            TextButton(
-                onClick = {
-                    stopActiveJog()
-                    settingsOpen = !settingsOpen
-                }
-            ) {
-                Text(if (settingsOpen) "Back" else "Settings")
+        if (settingsOpen) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { settingsOpen = false }) { Text("Back") }
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         if (settingsOpen) {
             SettingsScreen(
@@ -214,6 +201,10 @@ fun PendantApp() {
             )
         } else {
             PendantConnectionPanel(
+                onSettingsClick = {
+                    stopActiveJog()
+                    settingsOpen = true
+                },
                 onMachineStatusChanged = { newStatus ->
                     machineStatus = newStatus
 
@@ -250,6 +241,10 @@ fun PendantApp() {
                     moveAxisAction = action
                 },
 
+                onSelectWcsActionAvailable = { action ->
+                    selectWcsAction = action
+                },
+
                 onIncrementalJogActionAvailable = { action ->
                     incrementalJogAction = action
                 },
@@ -282,11 +277,7 @@ fun PendantApp() {
                     displayUnits = it
                     displayUnitsInitialized = true
                 },
-                zeroXEnabled =
-                machineStatus.connected &&
-                        machineStatus.machineState == "Idle" &&
-                        machineStatus.pendantInControl == false &&
-                        !coordinateCommandBusy,
+                zeroXEnabled = !coordinateCommandBusy,
                 onZeroAxis = { axis ->
                     zeroAxisAction?.invoke(axis)
                 },
@@ -295,7 +286,7 @@ fun PendantApp() {
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -341,8 +332,34 @@ fun PendantApp() {
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .pointerInput(selectedMode) {
+                        var dragTotal = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { dragTotal = 0f },
+                            onHorizontalDrag = { change, amount ->
+                                dragTotal += amount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (dragTotal < -70f) {
+                                    stopActiveJog()
+                                    selectedMode = (selectedMode + 1).coerceAtMost(3)
+                                    configureSelectedJogMode(selectedMode)
+                                } else if (dragTotal > 70f) {
+                                    stopActiveJog()
+                                    selectedMode = (selectedMode - 1).coerceAtLeast(0)
+                                    configureSelectedJogMode(selectedMode)
+                                }
+                            }
+                        )
+                    }
+            ) {
             when (selectedMode) {
                 0 -> MPGScreen(
                     position = mpgPosition,
@@ -455,10 +472,7 @@ fun PendantApp() {
                     status = machineStatus,
                     coordinateMode = coordinateDisplayMode,
                     displayUnits = displayUnits,
-                    enabled = machineStatus.connected &&
-                            machineStatus.machineState == "Idle" &&
-                            machineStatus.pendantInControl == false &&
-                            !coordinateCommandBusy,
+                    enabled = !coordinateCommandBusy,
                     onMove = { axis, target ->
                         moveAxisAction?.invoke(
                             axis, target, coordinateDisplayMode, displayUnits
@@ -469,6 +483,57 @@ fun PendantApp() {
                             axis, 0.0, coordinateDisplayMode, displayUnits
                         )
                     }
+                )
+            }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (wcsPanelExpanded) 116.dp else 26.dp)
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+                )
+                .pointerInput(wcsPanelExpanded) {
+                    detectVerticalDragGestures { _, dragAmount ->
+                        if (dragAmount < -5f) wcsPanelExpanded = true
+                        if (dragAmount > 5f) wcsPanelExpanded = false
+                    }
+                }
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            if (wcsPanelExpanded) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Active Work Coordinate System", style = MaterialTheme.typography.titleSmall)
+                        TextButton(onClick = { wcsPanelExpanded = false }) { Text("Hide") }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("G54", "G55", "G56", "G57", "G58", "G59").forEach { wcs ->
+                            FilterChip(
+                                selected = machineStatus.position.activeWcs == wcs,
+                                enabled = !coordinateCommandBusy,
+                                onClick = { selectWcsAction?.invoke(wcs) },
+                                label = { Text(wcs) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    "Swipe up · Work Coordinate System",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
