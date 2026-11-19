@@ -48,6 +48,8 @@ fun ContinuousJogScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
 
         OptionButtons(
             options = listOf("Hold to Run", "Tap to Toggle"),
@@ -63,42 +65,37 @@ fun ContinuousJogScreen(
         )
 
         Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                    shape = RoundedCornerShape(4.dp)
-                )
-                .padding(10.dp)
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Feed Rate: ",
-                    fontWeight = FontWeight.Light
-                )
-
-                Text(
-                    text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Light
-                )
-
-            }
-
-            Slider(
-                value = safeSpeed,
-                onValueChange = onSpeedChanged,
-                valueRange = 1f..maxFeedRate
+            Text(
+                text = "Feed Rate: ",
+                fontWeight = FontWeight.Normal
             )
+
+            Text(
+                text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Normal
+            )
+
         }
 
+        Slider(
+            value = safeSpeed,
+            onValueChange = onSpeedChanged,
+            valueRange = 1f..maxFeedRate
+        )
+
+
+        Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(6.dp))
 
         JogPad(

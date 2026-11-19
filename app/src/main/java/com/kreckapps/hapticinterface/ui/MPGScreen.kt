@@ -71,6 +71,14 @@ fun MPGScreen(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "Selected Axis",
+            fontWeight = FontWeight.Normal
+        )
 
         OptionButtons(
             options = listOf("X", "Y", "Z"),
@@ -79,10 +87,12 @@ fun MPGScreen(
         )
 
         Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Distance per detent ($unitLabel)",
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Normal
         )
 
         OptionButtons(
@@ -91,6 +101,8 @@ fun MPGScreen(
             onSelected = onResolutionChanged
         )
 
+        Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(6.dp))
 
         RotaryWheel(
@@ -222,7 +234,9 @@ fun RotaryWheel(
     ) {
         val tickColor = MaterialTheme.colorScheme.onSurface
 
-        Canvas(modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = position * (360f / safePulsesPerRev) }) {
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { rotationZ = position * (360f / safePulsesPerRev) }) {
             val center = Offset(
                 size.width / 2f,
                 size.height / 2f

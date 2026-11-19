@@ -64,6 +64,10 @@ fun IncrementalJogScreen(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -148,46 +152,41 @@ fun IncrementalJogScreen(
         }
 
         Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
 
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                    shape = RoundedCornerShape(4.dp)
-                )
-                .padding(10.dp)
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Feed Rate: ",
-                    fontWeight = FontWeight.Light
-                )
-
-                Text(
-                    text = "${String.format(Locale.US, "%.1f", safeFeedRate)} $feedUnit",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Light
-                )
-
-            }
-
-            Slider(
-                value = safeFeedRate,
-                onValueChange = { value ->
-                    focusManager.clearFocus()
-                    onFeedRateChanged(value)
-                },
-                valueRange = 1f..maxFeedRate
+            Text(
+                text = "Feed Rate: ",
+                fontWeight = FontWeight.Normal
             )
+
+            Text(
+                text = "${String.format(Locale.US, "%.1f", safeFeedRate)} $feedUnit",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Normal
+            )
+
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Slider(
+            value = safeFeedRate,
+            onValueChange = { value ->
+                focusManager.clearFocus()
+                onFeedRateChanged(value)
+            },
+            valueRange = 1f..maxFeedRate
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(6.dp))
 
         JogPad(
             incremental = true,
