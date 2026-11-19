@@ -271,6 +271,7 @@ fun RotaryWheel(
             fontWeight = FontWeight.Bold
         )
 
+        val markerColor = MaterialTheme.colorScheme.primary
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2f
             val top = 2.dp.toPx()
@@ -282,7 +283,7 @@ fun RotaryWheel(
                 lineTo(cx + half, top)
                 close()
             }
-            drawPath(marker, color = MaterialTheme.colorScheme.primary)
+            drawPath(marker, color = markerColor)
         }
     }
 }
