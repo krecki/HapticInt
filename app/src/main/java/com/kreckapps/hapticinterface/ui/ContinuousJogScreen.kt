@@ -104,25 +104,5 @@ fun ContinuousJogScreen(
             holdToRun = holdToRun
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = if (activeJog == null) {
-                "Jog inactive"
-            } else {
-                "Currently jogging: $activeJog"
-            },
-            fontWeight = FontWeight.Bold,
-            color = if (activeJog == null) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-        )
-
-        Text(
-            text = "Feed rate: ${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
-            fontSize = 14.sp
-        )
     }
 }
