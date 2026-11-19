@@ -180,12 +180,16 @@ fun PendantApp() {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-            .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 6.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 6.dp)
+        ) {
         if (settingsOpen) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { settingsOpen = false }) { Text("Back") }
@@ -201,6 +205,26 @@ fun PendantApp() {
             )
         } else {
 
+
+            PositionDisplay(
+                status = machineStatus,
+                displayMode = coordinateDisplayMode,
+                onDisplayModeChanged = {
+                    coordinateDisplayMode = it
+                },
+                displayUnits = displayUnits,
+                onDisplayUnitsChanged = {
+                    displayUnits = it
+                    displayUnitsInitialized = true
+                },
+                zeroXEnabled = !coordinateCommandBusy,
+                onZeroAxis = { axis ->
+                    zeroAxisAction?.invoke(axis)
+                },
+                onSetAxis = { axis, value ->
+                    setAxisAction?.invoke(axis, value)
+                }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -472,25 +496,7 @@ fun PendantApp() {
                 }
             )
 
-            PositionDisplay(
-                status = machineStatus,
-                displayMode = coordinateDisplayMode,
-                onDisplayModeChanged = {
-                    coordinateDisplayMode = it
-                },
-                displayUnits = displayUnits,
-                onDisplayUnitsChanged = {
-                    displayUnits = it
-                    displayUnitsInitialized = true
-                },
-                zeroXEnabled = !coordinateCommandBusy,
-                onZeroAxis = { axis ->
-                    zeroAxisAction?.invoke(axis)
-                },
-                onSetAxis = { axis, value ->
-                    setAxisAction?.invoke(axis, value)
-                }
-            )
+
 
         Box(
             modifier = Modifier
