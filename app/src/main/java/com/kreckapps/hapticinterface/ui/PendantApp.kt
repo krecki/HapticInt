@@ -1,10 +1,10 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,11 +24,9 @@ private const val MAX_FEED_MM_MIN = 2000f
 @Composable
 fun PendantApp() {
     var selectedMode by remember { mutableIntStateOf(0) }
-    var settingsOpen by remember { mutableStateOf(false) }
-    var wcsPanelExpanded by remember { mutableStateOf(false) }
+    var wcsPanelExpanded by remember { mutableStateOf(false) }\n    var topPanelExpanded by remember { mutableStateOf(false) }
 
     // MPG settings and state
-    var pulsesPerRev by remember { mutableIntStateOf(50) }
     var mpgPosition by remember { mutableIntStateOf(0) }
     var mpgResolution by remember { mutableStateOf("0.01") }
     var mpgAxis by remember { mutableStateOf("X") }
@@ -198,7 +196,6 @@ fun PendantApp() {
 
         if (settingsOpen) {
             SettingsScreen(
-                pulsesPerRev = pulsesPerRev,
                 onPulsesPerRevChanged = {
                     pulsesPerRev = it
                 }
@@ -306,7 +303,6 @@ fun PendantApp() {
                     onPositionChanged = {
                         mpgPosition = it
                     },
-                    pulsesPerRev = pulsesPerRev,
                     resolution = mpgResolution,
                     onResolutionChanged = {
                         mpgResolution = it
@@ -429,12 +425,20 @@ fun PendantApp() {
         }
 
         }
+        if (wcsPanelExpanded || topPanelExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+                    .clickable {
+                        wcsPanelExpanded = false
+                        topPanelExpanded = false
+                    }
+            )
+        }
+
         PendantConnectionPanel(
             modifier = Modifier.align(Alignment.TopCenter),
-                onSettingsClick = {
-                    stopActiveJog()
-                    settingsOpen = true
-                },
                 onMachineStatusChanged = { newStatus ->
                     machineStatus = newStatus
 
