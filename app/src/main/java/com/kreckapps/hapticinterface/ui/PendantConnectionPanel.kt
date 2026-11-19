@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.communication.PendantBluetoothManager
 import com.kreckapps.hapticinterface.communication.PendantCommandController
 import com.kreckapps.hapticinterface.model.MachineStatus
+import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineUnits
 import kotlinx.coroutines.delay
 
@@ -27,7 +28,7 @@ fun PendantConnectionPanel(
     onMachineStatusChanged: (MachineStatus) -> Unit,
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
-    onGoToZeroAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
+    onMoveAxisActionAvailable: (((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?) -> Unit,
     onIncrementalJogActionAvailable:
         (((Char, Double, Double, MachineUnits) -> Unit)?) -> Unit,
     onContinuousJogStartActionAvailable:
@@ -41,7 +42,7 @@ fun PendantConnectionPanel(
     val latestStatusCallback = rememberUpdatedState(onMachineStatusChanged)
     val latestZeroAxisCallback = rememberUpdatedState(onZeroAxisActionAvailable)
     val latestSetAxisCallback = rememberUpdatedState(onSetAxisActionAvailable)
-    val latestGoToZeroAxisCallback = rememberUpdatedState(onGoToZeroAxisActionAvailable)
+    val latestMoveAxisCallback = rememberUpdatedState(onMoveAxisActionAvailable)
     val latestIncrementalJogCallback =
         rememberUpdatedState(onIncrementalJogActionAvailable)
     val latestContinuousJogCallback =
@@ -109,9 +110,9 @@ fun PendantConnectionPanel(
         }
     }
 
-    val goToZeroAxisAction = remember(commandController) {
-        { axis: Char, feedRateMmMin: Double ->
-            commandController.goToWorkZero(axis, feedRateMmMin)
+    val moveAxisAction = remember(commandController) {
+        { axis: Char, target: Double, mode: CoordinateDisplayMode, units: MachineUnits ->
+            commandController.moveAxisToPosition(axis, target, mode, units)
         }
     }
 
@@ -154,7 +155,7 @@ fun PendantConnectionPanel(
     SideEffect {
         latestZeroAxisCallback.value(zeroAxisAction)
         latestSetAxisCallback.value(setAxisAction)
-        latestGoToZeroAxisCallback.value(goToZeroAxisAction)
+        latestMoveAxisCallback.value(moveAxisAction)
         latestIncrementalJogCallback.value(incrementalJogAction)
         latestContinuousJogCallback.value(continuousJogStartAction)
         latestStopJogCallback.value(stopJogAction)
@@ -215,7 +216,7 @@ fun PendantConnectionPanel(
         onDispose {
             latestZeroAxisCallback.value(null)
             latestSetAxisCallback.value(null)
-            latestGoToZeroAxisCallback.value(null)
+            latestMoveAxisCallback.value(null)
             latestIncrementalJogCallback.value(null)
             latestContinuousJogCallback.value(null)
             latestStopJogCallback.value(null)
