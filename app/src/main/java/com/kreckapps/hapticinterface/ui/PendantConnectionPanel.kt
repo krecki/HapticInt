@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.*
@@ -288,8 +290,12 @@ fun PendantConnectionPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)
+            )
             .padding(bottom = 8.dp)
-        .pointerInput(detailsExpanded) {
+            .pointerInput(detailsExpanded) {
             detectVerticalDragGestures { _, dragAmount ->
                 if (dragAmount > 8f) detailsExpanded = true
                 if (dragAmount < -8f) detailsExpanded = false
