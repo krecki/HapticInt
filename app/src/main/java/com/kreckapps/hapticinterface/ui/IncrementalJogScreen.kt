@@ -95,7 +95,10 @@ fun IncrementalJogScreen(
 
         Slider(
             value = safeFeedRate,
-            onValueChange = { value ->\n                focusManager.clearFocus()\n                onFeedRateChanged(value)\n            },
+            onValueChange = { value ->
+                focusManager.clearFocus()
+                onFeedRateChanged(value)
+            },
             valueRange = 1f..maxFeedRate
         )
 
