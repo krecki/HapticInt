@@ -24,7 +24,8 @@ private const val MAX_FEED_MM_MIN = 2000f
 @Composable
 fun PendantApp() {
     var selectedMode by remember { mutableIntStateOf(0) }
-    var wcsPanelExpanded by remember { mutableStateOf(false) }\n    var topPanelExpanded by remember { mutableStateOf(false) }
+    var wcsPanelExpanded by remember { mutableStateOf(false) }
+    var topPanelExpanded by remember { mutableStateOf(false) }
 
     // MPG settings and state
     var mpgPosition by remember { mutableIntStateOf(0) }
@@ -188,21 +189,6 @@ fun PendantApp() {
                 .fillMaxSize()
                 .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 6.dp)
         ) {
-        if (settingsOpen) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { settingsOpen = false }) { Text("Back") }
-            }
-        }
-
-        if (settingsOpen) {
-            SettingsScreen(
-                onPulsesPerRevChanged = {
-                    pulsesPerRev = it
-                }
-            )
-        } else {
-
-
             PositionDisplay(
                 status = machineStatus,
                 displayMode = coordinateDisplayMode,
@@ -424,7 +410,6 @@ fun PendantApp() {
             }
         }
 
-        }
         if (wcsPanelExpanded || topPanelExpanded) {
             Box(
                 modifier = Modifier
@@ -439,6 +424,8 @@ fun PendantApp() {
 
         PendantConnectionPanel(
             modifier = Modifier.align(Alignment.TopCenter),
+            expanded = topPanelExpanded,
+            onExpandedChange = { topPanelExpanded = it },
                 onMachineStatusChanged = { newStatus ->
                     machineStatus = newStatus
 
