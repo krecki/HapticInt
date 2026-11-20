@@ -2,6 +2,9 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,34 +22,32 @@ fun ModeTab(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    if (selected) {
-        Button(
-            onClick = onClick,
-            modifier = modifier.height(48.dp),
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
-        ) {
-            Text(
-                text = text,
-                modifier = Modifier.fillMaxWidth(),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .padding(top = 3.dp)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 9.dp,
+                    topEnd = 9.dp
+                )
             )
-        }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = modifier.height(48.dp),
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp)
-        ) {
-            Text(
-                text = text,
-                modifier = Modifier.fillMaxWidth(),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
+            .background(
+                if (selected) MaterialTheme.colorScheme.surface
+                else MaterialTheme.colorScheme.surfaceVariant
             )
-        }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.fillMaxWidth(),
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
