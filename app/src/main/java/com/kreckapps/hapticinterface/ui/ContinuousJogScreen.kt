@@ -9,12 +9,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.MachineUnits
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 
-private const val MAX_CONTINUOUS_FEED_MM_MIN = 2000f
+private const val MAX_CONTINUOUS_FEED_MM_MIN = 2500f
 private const val MM_PER_INCH = 25.4f
 
 @Composable
@@ -35,13 +36,11 @@ fun ContinuousJogScreen(
         "in/min"
     }
 
-    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
-        MAX_CONTINUOUS_FEED_MM_MIN
-    } else {
-        MAX_CONTINUOUS_FEED_MM_MIN / MM_PER_INCH
-    }
-
-    val safeSpeed = speed.coerceIn(1f, maxFeedRate)
+    val isMetric = displayUnits == MachineUnits.MILLIMETERS
+    val minFeedRate = if (isMetric) 25f else 1f
+    val maxFeedRate = if (isMetric) MAX_CONTINUOUS_FEED_MM_MIN else 98f
+    val sliderSteps = if (isMetric) 98 else 96
+    val safeSpeed = speed.roundToInt().toFloat().coerceIn(minFeedRate, maxFeedRate)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -80,7 +79,7 @@ fun ContinuousJogScreen(
             )
 
             Text(
-                text = "${String.format(Locale.US, "%.1f", safeSpeed)} $unitLabel",
+                text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Normal
             )
@@ -90,7 +89,8 @@ fun ContinuousJogScreen(
         Slider(
             value = safeSpeed,
             onValueChange = onSpeedChanged,
-            valueRange = 1f..maxFeedRate
+            valueRange = minFeedRate..maxFeedRate,
+            steps = sliderSteps
         )
 
 
