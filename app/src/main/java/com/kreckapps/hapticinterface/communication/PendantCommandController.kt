@@ -56,7 +56,7 @@ class PendantCommandController(
 
         private const val CONTINUOUS_JOG_DISTANCE_MM = 220.0
 
-        private const val MAX_FEED_MM_MIN = 2000.0
+        private const val MAX_FEED_MM_MIN = 2500.0
         private const val MM_PER_INCH = 25.4
     }
 
