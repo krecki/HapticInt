@@ -192,7 +192,7 @@ fun PendantApp() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 6.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 42.dp)
         ) {
             PositionDisplay(
                 status = machineStatus,
@@ -260,8 +260,6 @@ fun PendantApp() {
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -287,7 +285,7 @@ fun PendantApp() {
                                 }
                             )
                         }
-                        .padding(8.dp)
+                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     when (selectedMode) {
                 0 -> MPGScreen(
