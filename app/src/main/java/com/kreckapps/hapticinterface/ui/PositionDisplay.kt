@@ -161,7 +161,7 @@ fun PositionDisplay(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top
         ) {
             listOf('X', 'Y', 'Z').forEachIndexed { index, axis ->
