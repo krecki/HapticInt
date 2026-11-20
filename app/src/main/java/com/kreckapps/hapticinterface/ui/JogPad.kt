@@ -28,7 +28,7 @@ fun JogPad(
     onStop: (() -> Unit)? = null
 ) {
     BoxWithConstraints(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         val horizontalGap = 6.dp
