@@ -532,7 +532,8 @@ fun PendantApp() {
                         selected = machineStatus.position.activeWcs,
                         onSelected = { wcs -> selectWcsAction?.invoke(wcs) },
                         modifier = Modifier.fillMaxWidth(),
-                        compact = true
+                        compact = true,
+                        enabled = !coordinateCommandBusy
                     )
                 }
             } else {
