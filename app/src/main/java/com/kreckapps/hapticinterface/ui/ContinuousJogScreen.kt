@@ -42,7 +42,7 @@ fun ContinuousJogScreen(
     val safeSpeed = speed.roundToInt().toFloat().coerceIn(minFeedRate, maxFeedRate)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(6.dp))
@@ -96,23 +96,30 @@ fun ContinuousJogScreen(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(6.dp))
 
-        JogPad(
-            activeJog = activeJog,
-            onJogChanged = { direction ->
-                onJogChanged(direction)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            JogPad(
+                activeJog = activeJog,
+                onJogChanged = { direction ->
+                    onJogChanged(direction)
 
-                if (direction == null) {
-                    onStopJog()
-                } else {
-                    onJogRequest(
-                        direction,
-                        safeSpeed.toDouble(),
-                        displayUnits
-                    )
-                }
-            },
-            holdToRun = holdToRun
-        )
+                    if (direction == null) {
+                        onStopJog()
+                    } else {
+                        onJogRequest(
+                            direction,
+                            safeSpeed.toDouble(),
+                            displayUnits
+                        )
+                    }
+                },
+                holdToRun = holdToRun
+            )
+        }
 
     }
 }
