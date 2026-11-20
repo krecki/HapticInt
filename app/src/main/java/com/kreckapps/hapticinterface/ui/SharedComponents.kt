@@ -69,31 +69,29 @@ fun OptionButtons(
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         options.forEach { option ->
+            val buttonModifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+
             if (option == selected) {
                 Button(
                     onClick = { onSelected(option) },
-                    modifier = Modifier.padding(horizontal = 3.dp),
-                    contentPadding = PaddingValues(
-                        horizontal = 10.dp,
-                        vertical = 8.dp
-                    )
+                    modifier = buttonModifier,
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
                 ) {
-                    Text(option, fontSize = 12.sp)
+                    Text(option, fontSize = 12.sp, textAlign = TextAlign.Center)
                 }
             } else {
                 OutlinedButton(
                     onClick = { onSelected(option) },
-                    modifier = Modifier.padding(horizontal = 3.dp),
-                    contentPadding = PaddingValues(
-                        horizontal = 10.dp,
-                        vertical = 8.dp
-                    )
+                    modifier = buttonModifier,
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
                 ) {
-                    Text(option, fontSize = 12.sp)
+                    Text(option, fontSize = 12.sp, textAlign = TextAlign.Center)
                 }
             }
         }
