@@ -10,9 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +26,8 @@ fun JogPad(
     onIncrementalJog: (String) -> Unit = {},
     onStop: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -77,6 +78,7 @@ fun JogPad(
 
                 Button(
                     onClick = {
+                        performAppHaptic(context)
                         if (onStop != null) onStop() else onJogChanged(null)
                     },
                     modifier = Modifier.size(cellSize),
@@ -137,7 +139,7 @@ fun JogDirectionButton(
     onJogChanged: (String?) -> Unit,
     onIncrementalJog: (String) -> Unit
 ) {
-    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     val latestActive by rememberUpdatedState(active)
     val latestOnJogChanged by rememberUpdatedState(onJogChanged)
@@ -169,7 +171,7 @@ fun JogDirectionButton(
                 detectTapGestures(
                     onPress = {
                         if (incremental) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            performAppHaptic(context)
                             latestOnIncrementalJog(label)
                         } else if (holdToRun) {
                             latestOnJogChanged(label)
