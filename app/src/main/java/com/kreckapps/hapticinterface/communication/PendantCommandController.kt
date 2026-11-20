@@ -605,15 +605,14 @@ class PendantCommandController(
             return false
         }
 
-        // Compare in the controller's internal mm/min units. The inch slider
-        // endpoint is a Float, so its Double conversion can exceed the exact
-        // 2000/25.4 boundary by a few millionths.
+        // Compare feed rate in the controller's internal mm/min units.
+        // The inch slider is capped at 98 in/min (2489.2 mm/min).
         val feedRateMmMin = toMillimeters(feedRate, units)
         if (feedRateMmMin > MAX_FEED_MM_MIN + 0.001) {
             val maximum = if (units == MachineUnits.MILLIMETERS) {
                 MAX_FEED_MM_MIN
             } else {
-                MAX_FEED_MM_MIN / MM_PER_INCH
+                98.0
             }
             onMessageChanged(
                 "Feed rate exceeds the pendant limit of " +
