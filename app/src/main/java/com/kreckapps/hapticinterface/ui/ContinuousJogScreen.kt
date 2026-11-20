@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,11 +83,16 @@ fun ContinuousJogScreen(
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center
         ) {
+            val jogPadScale = minOf(1f, maxWidth.value / 300f, maxHeight.value / 156f)
             JogPad(
+                modifier = Modifier.graphicsLayer(
+                    scaleX = jogPadScale,
+                    scaleY = jogPadScale
+                ),
                 activeJog = activeJog,
                 onJogChanged = { direction ->
                     onJogChanged(direction)
