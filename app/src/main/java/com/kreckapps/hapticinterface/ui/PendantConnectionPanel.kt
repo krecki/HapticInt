@@ -303,28 +303,36 @@ fun PendantConnectionPanel(
                             text = "Connecting…",
                             onClick = {},
                             enabled = false,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionNeutralContainer,
+                            labelColor = PendantColors.onActionNeutralContainer
                         )
                     }
                     PendantBluetoothManager.ConnectionState.CONNECTED -> {
                         PanelActionChip(
                             text = "Disconnect",
                             onClick = { connectOrDisconnect() },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionDangerContainer,
+                            labelColor = PendantColors.onActionDangerContainer
                         )
                     }
                     else -> {
                         PanelActionChip(
                             text = "Connect",
                             onClick = { connectOrDisconnect() },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionPrimaryContainer,
+                            labelColor = PendantColors.onActionPrimaryContainer
                         )
                     }
                 }
                 PanelActionChip(
                     text = "Home Machine",
                     onClick = { commandController.homeMachine() },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    containerColor = PendantColors.actionSecondaryContainer,
+                    labelColor = PendantColors.onActionSecondaryContainer
                 )
             }
 
