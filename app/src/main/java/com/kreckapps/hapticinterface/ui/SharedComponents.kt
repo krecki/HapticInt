@@ -156,13 +156,29 @@ fun PanelActionChip(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    containerColor: Color = PendantColors.actionSecondaryContainer,
+    labelColor: Color = PendantColors.onActionSecondaryContainer
 ) {
     FilterChip(
         selected = false,
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = containerColor,
+            labelColor = labelColor,
+            selectedContainerColor = containerColor,
+            selectedLabelColor = labelColor,
+            disabledContainerColor = PendantColors.actionNeutralContainer.copy(alpha = 0.55f),
+            disabledLabelColor = PendantColors.onActionNeutralContainer.copy(alpha = 0.55f)
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = enabled,
+            selected = false,
+            borderColor = PendantColors.outlineVariant,
+            selectedBorderColor = PendantColors.outlineVariant
+        ),
         label = {
             Text(
                 text = text,
