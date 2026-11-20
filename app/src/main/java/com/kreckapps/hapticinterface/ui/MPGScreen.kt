@@ -68,7 +68,7 @@ fun MPGScreen(
     }
 
     val mpgFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
-        2000.0
+        2500.0
     } else {
         2000.0 / 25.4
     }
