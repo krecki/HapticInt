@@ -68,10 +68,10 @@ fun IncrementalJogScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Text("Step Distance", fontWeight = FontWeight.Normal)
+                PanelSectionTitle("Step Distance")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -169,11 +169,12 @@ fun IncrementalJogScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Feed Rate", fontWeight = FontWeight.Normal)
+            PanelSectionTitle("Feed Rate")
             Text(
                 text = "${String.format(Locale.US, "%.0f", safeFeedRate)} $feedUnit",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Normal
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = 0.sp
             )
         }
 
@@ -196,12 +197,10 @@ fun IncrementalJogScreen(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            val jogPadScale = minOf(1f, maxWidth.value / 300f, maxHeight.value / 156f)
             JogPad(
-                modifier = Modifier.graphicsLayer(
-                    scaleX = jogPadScale,
-                    scaleY = jogPadScale
-                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(scaleX = 0.90f, scaleY = 0.90f),
                 incremental = true,
                 onIncrementalJog = { direction ->
                     focusManager.clearFocus()
