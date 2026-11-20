@@ -197,7 +197,8 @@ fun PositionDisplay(
                         else CoordinateDisplayMode.WORK
                     )
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                compact = true
             )
             OptionButtons(
                 options = listOf("Inch", "mm"),
@@ -208,7 +209,8 @@ fun PositionDisplay(
                         else MachineUnits.MILLIMETERS
                     )
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                compact = true
             )
         }
 
