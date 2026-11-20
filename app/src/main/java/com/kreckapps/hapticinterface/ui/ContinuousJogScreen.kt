@@ -41,17 +41,20 @@ fun ContinuousJogScreen(
             modifier = Modifier.fillMaxWidth().height(88.dp),
             contentAlignment = Alignment.Center
         ) {
-            OptionButtons(
-                options = listOf("Hold to Run", "Tap to Toggle"),
-                selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
-                onSelected = {
-                    if (activeJog != null) {
-                        onStopJog()
-                        onJogChanged(null)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Jog Mode", fontWeight = FontWeight.Normal)
+                OptionButtons(
+                    options = listOf("Hold to Run", "Tap to Toggle"),
+                    selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
+                    onSelected = {
+                        if (activeJog != null) {
+                            onStopJog()
+                            onJogChanged(null)
+                        }
+                        onHoldToRunChanged(it == "Hold to Run")
                     }
-                    onHoldToRunChanged(it == "Hold to Run")
-                }
-            )
+                )
+            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
@@ -61,12 +64,8 @@ fun ContinuousJogScreen(
             contentAlignment = Alignment.Center
         ) {
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Feed Rate:", fontWeight = FontWeight.Normal)
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+                    Text("Feed Rate", fontWeight = FontWeight.Normal)
                     Text(
                         text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
                         fontSize = 18.sp,
