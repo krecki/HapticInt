@@ -145,7 +145,9 @@ fun MoveToPositionScreen(
                                     ?.toDoubleOrNull()
                                     ?.isFinite() == true
                                 ),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        containerColor = PendantColors.actionPrimaryContainer,
+                        labelColor = PendantColors.onActionPrimaryContainer
                     )
 
                     PanelActionChip(
@@ -155,7 +157,9 @@ fun MoveToPositionScreen(
                             onMoveToZero(axis)
                         },
                         enabled = enabled,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        containerColor = PendantColors.actionNeutralContainer,
+                        labelColor = PendantColors.onActionNeutralContainer
                     )
                 }
             }
