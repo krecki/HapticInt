@@ -55,7 +55,6 @@ fun IncrementalJogScreen(
     val isMetric = displayUnits == MachineUnits.MILLIMETERS
     val minFeedRate = if (isMetric) 25f else 1f
     val maxFeedRate = if (isMetric) MAX_FEED_MM_MIN else 98f
-    val sliderSteps = if (isMetric) 98 else 96
     val safeFeedRate = feedRate.roundToInt().toFloat().coerceIn(minFeedRate, maxFeedRate)
     val focusManager = LocalFocusManager.current
 
@@ -181,7 +180,6 @@ fun IncrementalJogScreen(
                 onFeedRateChanged(value)
             },
             valueRange = minFeedRate..maxFeedRate,
-            steps = sliderSteps
         )
 
         Spacer(modifier = Modifier.height(6.dp))
