@@ -220,7 +220,7 @@ fun IncrementalJogScreen(
 
                         onCommand(
                             "Jog $direction: $step $unitLabel at " +
-                                    "\${safeFeedRate.toInt()} $feedUnit"
+                                    "${safeFeedRate.toInt()} $feedUnit"
                         )
 
                         onJogRequest(
