@@ -1,6 +1,9 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -135,9 +138,17 @@ fun PendantApp() {
     ) 25f else 1f
 
     fun updateDisplayedFeedRate(value: Float) {
-        val safeValue = value.coerceIn(minimumDisplayedFeedRate, maximumDisplayedFeedRate)
-            .roundToInt().toFloat()
-        jogFeedRateMmMin = if (displayUnits == MachineUnits.MILLIMETERS) safeValue else safeValue * MM_PER_INCH
+        val increment = if (displayUnits == MachineUnits.MILLIMETERS) 25f else 1f
+        val safeValue = (value / increment).roundToInt() * increment
+        val clampedValue = safeValue.coerceIn(
+            minimumDisplayedFeedRate,
+            maximumDisplayedFeedRate
+        )
+        jogFeedRateMmMin = if (displayUnits == MachineUnits.MILLIMETERS) {
+            clampedValue
+        } else {
+            clampedValue * MM_PER_INCH
+        }
     }
 
     fun configureSelectedJogMode(mode: Int) {
@@ -210,79 +221,75 @@ fun PendantApp() {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                ModeTab(
-                    text = "MPG",
-                    selected = selectedMode == 0,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    stopActiveJog()
-                    selectedMode = 0
-                    configureSelectedJogMode(0)
-                }
-
-                ModeTab(
-                    text = "Continuous",
-                    selected = selectedMode == 1,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    stopActiveJog()
-                    selectedMode = 1
-                    configureSelectedJogMode(1)
-                }
-
-                ModeTab(
-                    text = "Incremental",
-                    selected = selectedMode == 2,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    stopActiveJog()
-                    selectedMode = 2
-                    configureSelectedJogMode(2)
-                }
-
-                ModeTab(
-                    text = "Position",
-                    selected = selectedMode == 3,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    stopActiveJog()
-                    selectedMode = 3
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .pointerInput(selectedMode) {
-                        var dragTotal = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { dragTotal = 0f },
-                            onHorizontalDrag = { change, amount ->
-                                dragTotal += amount
-                                change.consume()
-                            },
-                            onDragEnd = {
-                                if (dragTotal < -70f) {
-                                    stopActiveJog()
-                                    selectedMode = (selectedMode + 1).coerceAtMost(3)
-                                    configureSelectedJogMode(selectedMode)
-                                } else if (dragTotal > 70f) {
-                                    stopActiveJog()
-                                    selectedMode = (selectedMode - 1).coerceAtLeast(0)
-                                    configureSelectedJogMode(selectedMode)
-                                }
-                            }
-                        )
-                    }
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(12.dp)
+                    )
             ) {
-            when (selectedMode) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    ModeTab("MPG", selectedMode == 0, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 0
+                        configureSelectedJogMode(0)
+                    }
+                    ModeTab("Continuous", selectedMode == 1, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 1
+                        configureSelectedJogMode(1)
+                    }
+                    ModeTab("Incremental", selectedMode == 2, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 2
+                        configureSelectedJogMode(2)
+                    }
+                    ModeTab("Position", selectedMode == 3, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 3
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .pointerInput(selectedMode) {
+                            var dragTotal = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragTotal = 0f },
+                                onHorizontalDrag = { change, amount ->
+                                    dragTotal += amount
+                                    change.consume()
+                                },
+                                onDragEnd = {
+                                    if (dragTotal < -70f) {
+                                        stopActiveJog()
+                                        selectedMode = (selectedMode + 1).coerceAtMost(3)
+                                        configureSelectedJogMode(selectedMode)
+                                    } else if (dragTotal > 70f) {
+                                        stopActiveJog()
+                                        selectedMode = (selectedMode - 1).coerceAtLeast(0)
+                                        configureSelectedJogMode(selectedMode)
+                                    }
+                                }
+                            )
+                        }
+                        .padding(8.dp)
+                ) {
+                    when (selectedMode) {
                 0 -> MPGScreen(
                     position = mpgPosition,
                     onPositionChanged = {
@@ -406,7 +413,8 @@ fun PendantApp() {
                         )
                     }
                 )
-            }
+                    }
+                }
             }
         }
 
@@ -501,7 +509,7 @@ fun PendantApp() {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(if (wcsPanelExpanded) 116.dp else 26.dp)
+                .height(if (wcsPanelExpanded) 116.dp else 34.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .pointerInput(wcsPanelExpanded) {
                     detectVerticalDragGestures { _, dragAmount ->
@@ -536,12 +544,18 @@ fun PendantApp() {
                     }
                 }
             } else {
-                Text(
-                    "Swipe up · Work Coordinate System",
-                    modifier = Modifier.align(Alignment.Center),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Swipe up · Work Coordinate System",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
