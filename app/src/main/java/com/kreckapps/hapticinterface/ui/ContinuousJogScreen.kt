@@ -55,7 +55,8 @@ fun ContinuousJogScreen(
                             onJogChanged(null)
                         }
                         onHoldToRunChanged(it == "Hold to Run")
-                    }
+                    },
+                    compact = true
                 )
             }
         }
