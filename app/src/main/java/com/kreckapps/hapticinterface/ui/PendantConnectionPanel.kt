@@ -359,16 +359,19 @@ fun PendantConnectionPanel(
                 }
             }
         } else {
-            Text(
-                "Swipe down · Connection controls",
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(34.dp)
                     .clickable { onExpandedChange(true) },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Swipe down · Connection controls",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
