@@ -67,10 +67,15 @@ fun IncrementalJogScreen(
             modifier = Modifier.fillMaxWidth().height(88.dp),
             contentAlignment = Alignment.Center
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text("Step Distance", fontWeight = FontWeight.Normal)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
             for (axis in listOf("X", "Y", "Z")) {
 
                 var fieldValue by remember(axis) {
@@ -148,7 +153,8 @@ fun IncrementalJogScreen(
                     )
                 )
             }
-        }
+                }
+            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
@@ -158,24 +164,15 @@ fun IncrementalJogScreen(
             contentAlignment = Alignment.Center
         ) {
         Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
         ) {
-            Text(
-                text = "Feed Rate: ",
-                fontWeight = FontWeight.Normal
-            )
-
+            Text("Feed Rate", fontWeight = FontWeight.Normal)
             Text(
                 text = "${String.format(Locale.US, "%.0f", safeFeedRate)} $feedUnit",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Normal
             )
-
         }
 
         Slider(
