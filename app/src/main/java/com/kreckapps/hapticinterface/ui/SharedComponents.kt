@@ -75,7 +75,8 @@ fun OptionButtons(
     selected: String,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    compact: Boolean = false
+    compact: Boolean = false,
+    enabled: Boolean = true
 ) {
     if (compact) {
         Row(
@@ -103,7 +104,7 @@ fun OptionButtons(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else Color.Transparent
                         )
-                        .clickable { onSelected(option) },
+                        .clickable(enabled = enabled) { onSelected(option) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -111,7 +112,8 @@ fun OptionButtons(
                         fontSize = 12.sp,
                         letterSpacing = 0.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        else if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
