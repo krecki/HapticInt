@@ -41,8 +41,11 @@ fun ContinuousJogScreen(
             modifier = Modifier.fillMaxWidth().height(88.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Jog Mode", fontWeight = FontWeight.Normal)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                PanelSectionTitle("Jog Mode")
                 OptionButtons(
                     options = listOf("Hold to Run", "Tap to Toggle"),
                     selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
@@ -69,11 +72,12 @@ fun ContinuousJogScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Feed Rate", fontWeight = FontWeight.Normal)
+                    PanelSectionTitle("Feed Rate")
                     Text(
                         text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Normal
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.sp
                     )
                 }
                 Slider(
@@ -90,12 +94,10 @@ fun ContinuousJogScreen(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            val jogPadScale = minOf(1f, maxWidth.value / 300f, maxHeight.value / 156f)
             JogPad(
-                modifier = Modifier.graphicsLayer(
-                    scaleX = jogPadScale,
-                    scaleY = jogPadScale
-                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(scaleX = 0.90f, scaleY = 0.90f),
                 activeJog = activeJog,
                 onJogChanged = { direction ->
                     onJogChanged(direction)
