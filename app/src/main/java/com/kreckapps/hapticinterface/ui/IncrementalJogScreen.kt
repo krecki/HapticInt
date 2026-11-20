@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -190,13 +191,18 @@ fun IncrementalJogScreen(
 
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
+            val jogPadScale = minOf(1f, maxWidth.value / 300f, maxHeight.value / 156f)
             JogPad(
+                modifier = Modifier.graphicsLayer(
+                    scaleX = jogPadScale,
+                    scaleY = jogPadScale
+                ),
                 incremental = true,
                 onIncrementalJog = { direction ->
                     focusManager.clearFocus()
