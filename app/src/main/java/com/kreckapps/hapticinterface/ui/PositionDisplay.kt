@@ -120,11 +120,44 @@ fun PositionDisplay(
             )
             .padding(10.dp)
     ) {
-        Text(
-            text = "Machine Position",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Machine Position",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            val controllerStatus = when {
+                !status.connected -> "Disconnected"
+                status.pendantInControl == true -> "In control"
+                status.pendantInControl == false -> "Listening"
+                else -> "Waiting"
+            }
+            val statusColor = when {
+                !status.connected -> MaterialTheme.colorScheme.onSurfaceVariant
+                status.pendantInControl == true -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.tertiary
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(statusColor, RoundedCornerShape(50))
+                )
+                Text(
+                    text = controllerStatus,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -243,10 +276,13 @@ fun PositionDisplay(
             }
         }
 
-        if (isWorkDisplay) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = position.activeWcs,
-                modifier = Modifier.align(Alignment.End),
+                text = if (isWorkDisplay) position.activeWcs else "Machine coordinates",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
