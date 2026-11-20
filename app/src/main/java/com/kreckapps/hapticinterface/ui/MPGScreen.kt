@@ -87,8 +87,11 @@ fun MPGScreen(
             modifier = Modifier.fillMaxWidth().height(88.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Selected Axis", fontWeight = FontWeight.Normal)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                PanelSectionTitle("Selected Axis")
                 OptionButtons(
                     options = listOf("X", "Y", "Z"),
                     selected = axis,
@@ -103,8 +106,11 @@ fun MPGScreen(
             modifier = Modifier.fillMaxWidth().height(96.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Distance per detent ($unitLabel)", fontWeight = FontWeight.Normal)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                PanelSectionTitle("Distance per detent ($unitLabel)")
                 OptionButtons(
                     options = resolutionOptions,
                     selected = displayedResolution,
