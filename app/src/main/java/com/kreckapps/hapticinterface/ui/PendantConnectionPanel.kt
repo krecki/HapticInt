@@ -299,30 +299,33 @@ fun PendantConnectionPanel(
             ) {
                 when (connectionState) {
                     PendantBluetoothManager.ConnectionState.CONNECTING -> {
-                        OutlinedButton(
+                        PanelActionChip(
+                            text = "Connecting…",
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.weight(1f)
-                        ) { Text("Connecting…") }
+                        )
                     }
                     PendantBluetoothManager.ConnectionState.CONNECTED -> {
-                        OutlinedButton(
+                        PanelActionChip(
+                            text = "Disconnect",
                             onClick = { connectOrDisconnect() },
                             modifier = Modifier.weight(1f)
-                        ) { Text("Disconnect") }
+                        )
                     }
                     else -> {
-                        Button(
+                        PanelActionChip(
+                            text = "Connect",
                             onClick = { connectOrDisconnect() },
                             modifier = Modifier.weight(1f)
-                        ) { Text("Connect") }
+                        )
                     }
                 }
-                Button(
+                PanelActionChip(
+                    text = "Home Machine",
                     onClick = { commandController.homeMachine() },
-                    enabled = true,
                     modifier = Modifier.weight(1f)
-                ) { Text("Home Machine") }
+                )
             }
 
             Column(
