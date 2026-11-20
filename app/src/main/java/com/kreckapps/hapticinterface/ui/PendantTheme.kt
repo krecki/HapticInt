@@ -18,6 +18,22 @@ object PendantColors {
     val primaryContainer = Color(0xFFD6E8FF)
     val onPrimaryContainer = Color(0xFF102A43)
 
+    // Jog-pad button states, matching the compact segmented selectors.
+    val jogButton = Color(0xFFE9EDF1)
+    val onJogButton = Color(0xFF53616D)
+    val jogButtonActive = Color(0xFFD6E8FF)
+    val onJogButtonActive = Color(0xFF102A43)
+
+    // Action-chip palette for the position and connection panels.
+    val actionPrimaryContainer = Color(0xFFD6E8FF)
+    val onActionPrimaryContainer = Color(0xFF102A43)
+    val actionSecondaryContainer = Color(0xFFDCE8F2)
+    val onActionSecondaryContainer = Color(0xFF172B3A)
+    val actionNeutralContainer = Color(0xFFE9EDF1)
+    val onActionNeutralContainer = Color(0xFF53616D)
+    val actionDangerContainer = Color(0xFFFCE8E6)
+    val onActionDangerContainer = Color(0xFF8C1D18)
+
     // Secondary accents.
     val secondary = Color(0xFF386A9B)
     val onSecondary = Color(0xFFFFFFFF)
@@ -38,6 +54,8 @@ object PendantColors {
     val tertiary = Color(0xFF557C69)
     val onTertiary = Color(0xFFFFFFFF)
     val error = Color(0xFFBA1A1A)
+    val errorContainer = Color(0xFFFCE8E6)
+    val onErrorContainer = Color(0xFF8C1D18)
     val onError = Color(0xFFFFFFFF)
 }
 
@@ -54,6 +72,8 @@ private val PendantColorScheme = lightColorScheme(
     onTertiary = PendantColors.onTertiary,
     error = PendantColors.error,
     onError = PendantColors.onError,
+    errorContainer = PendantColors.errorContainer,
+    onErrorContainer = PendantColors.onErrorContainer,
     background = PendantColors.background,
     onBackground = PendantColors.onBackground,
     surface = PendantColors.surface,
