@@ -163,7 +163,7 @@ fun MoveToPositionScreen(
             }
 
             if (index < 2) {
-                HorizontalDivider()
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
             }
         }
     }

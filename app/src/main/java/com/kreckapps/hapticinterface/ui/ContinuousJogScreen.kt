@@ -46,8 +46,6 @@ fun ContinuousJogScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(6.dp))
 
         OptionButtons(
             options = listOf("Hold to Run", "Tap to Toggle"),
@@ -63,12 +61,13 @@ fun ContinuousJogScreen(
         )
 
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
         Spacer(modifier = Modifier.height(6.dp))
 
-
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -91,9 +90,8 @@ fun ContinuousJogScreen(
             valueRange = minFeedRate..maxFeedRate,
         )
 
-
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
         Spacer(modifier = Modifier.height(6.dp))
 
         Box(

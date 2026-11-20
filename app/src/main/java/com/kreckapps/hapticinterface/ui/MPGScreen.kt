@@ -90,8 +90,7 @@ fun MPGScreen(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(6.dp))
-        HorizontalDivider()
+
         Spacer(Modifier.height(6.dp))
 
         Text(
@@ -106,8 +105,8 @@ fun MPGScreen(
         )
 
         Spacer(Modifier.height(6.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(6.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = "Distance per detent ($unitLabel)",
@@ -121,8 +120,8 @@ fun MPGScreen(
         )
 
         Spacer(Modifier.height(6.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(6.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         RotaryWheel(
             position = position,

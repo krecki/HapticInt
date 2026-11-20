@@ -63,8 +63,6 @@ fun IncrementalJogScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(6.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -150,7 +148,7 @@ fun IncrementalJogScreen(
         }
 
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
         Spacer(modifier = Modifier.height(6.dp))
 
         Row(
@@ -183,7 +181,7 @@ fun IncrementalJogScreen(
         )
 
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider()
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
         Spacer(modifier = Modifier.height(6.dp))
 
         Box(
