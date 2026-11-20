@@ -1,4 +1,3 @@
-
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
@@ -28,117 +27,97 @@ fun JogPad(
     onIncrementalJog: (String) -> Unit = {},
     onStop: (() -> Unit)? = null
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        val horizontalGap = 6.dp
+        val verticalGap = 6.dp
+        val availableCellWidth = (maxWidth - horizontalGap * 3) / 4
+        val availableCellHeight = (maxHeight - verticalGap * 2) / 3
+        val cellSize = minOf(72.dp, availableCellWidth, availableCellHeight)
+            .coerceAtLeast(40.dp)
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(verticalGap),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // XY joystick layout
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row {
-                    Spacer(modifier = Modifier.width(54.dp))
-
-                    JogDirectionButton(
-                        label = "+Y",
-                        active = activeJog == "+Y",
-                        width = 54.dp,
-                        holdToRun = holdToRun,
-                        incremental = incremental,
-                        onJogChanged = onJogChanged,
-                        onIncrementalJog = onIncrementalJog
-                    )
-
-                    Spacer(modifier = Modifier.width(74.dp))
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    JogDirectionButton(
-                        label = "-X",
-                        active = activeJog == "-X",
-                        width = 74.dp,
-                        holdToRun = holdToRun,
-                        incremental = incremental,
-                        onJogChanged = onJogChanged,
-                        onIncrementalJog = onIncrementalJog
-                    )
-
-                    Button(
-                        onClick = {
-                            if (onStop != null) {
-                                onStop()
-                            } else {
-                                onJogChanged(null)
-                            }
-                        },
-                        modifier = Modifier.size(54.dp, 48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
-                        contentPadding = PaddingValues(2.dp)
-                    ) {
-                        Text(
-                            "STOP",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    JogDirectionButton(
-                        label = "+X",
-                        active = activeJog == "+X",
-                        width = 74.dp,
-                        holdToRun = holdToRun,
-                        incremental = incremental,
-                        onJogChanged = onJogChanged,
-                        onIncrementalJog = onIncrementalJog
-                    )
-                }
-
-                Row {
-                    Spacer(modifier = Modifier.width(74.dp))
-
-                    JogDirectionButton(
-                        label = "-Y",
-                        active = activeJog == "-Y",
-                        width = 74.dp,
-                        holdToRun = holdToRun,
-                        incremental = incremental,
-                        onJogChanged = onJogChanged,
-                        onIncrementalJog = onIncrementalJog
-                    )
-
-                    Spacer(modifier = Modifier.width(74.dp))
-                }
-            }
-
-            // Z buttons stacked vertically to the right
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
+                Spacer(Modifier.size(cellSize))
+                JogDirectionButton(
+                    label = "+Y",
+                    active = activeJog == "+Y",
+                    size = cellSize,
+                    holdToRun = holdToRun,
+                    incremental = incremental,
+                    onJogChanged = onJogChanged,
+                    onIncrementalJog = onIncrementalJog
+                )
+                Spacer(Modifier.size(cellSize))
                 JogDirectionButton(
                     label = "+Z",
                     active = activeJog == "+Z",
-                    width = 48.dp,
+                    size = cellSize,
+                    holdToRun = holdToRun,
+                    incremental = incremental,
+                    onJogChanged = onJogChanged,
+                    onIncrementalJog = onIncrementalJog
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
+                JogDirectionButton(
+                    label = "-X",
+                    active = activeJog == "-X",
+                    size = cellSize,
                     holdToRun = holdToRun,
                     incremental = incremental,
                     onJogChanged = onJogChanged,
                     onIncrementalJog = onIncrementalJog
                 )
 
+                Button(
+                    onClick = {
+                        if (onStop != null) onStop() else onJogChanged(null)
+                    },
+                    modifier = Modifier.size(cellSize),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    ),
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Text("STOP", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                JogDirectionButton(
+                    label = "+X",
+                    active = activeJog == "+X",
+                    size = cellSize,
+                    holdToRun = holdToRun,
+                    incremental = incremental,
+                    onJogChanged = onJogChanged,
+                    onIncrementalJog = onIncrementalJog
+                )
+                Spacer(Modifier.size(cellSize))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
+                Spacer(Modifier.size(cellSize))
+                JogDirectionButton(
+                    label = "-Y",
+                    active = activeJog == "-Y",
+                    size = cellSize,
+                    holdToRun = holdToRun,
+                    incremental = incremental,
+                    onJogChanged = onJogChanged,
+                    onIncrementalJog = onIncrementalJog
+                )
+                Spacer(Modifier.size(cellSize))
                 JogDirectionButton(
                     label = "-Z",
                     active = activeJog == "-Z",
-                    width = 66.dp,
+                    size = cellSize,
                     holdToRun = holdToRun,
                     incremental = incremental,
                     onJogChanged = onJogChanged,
@@ -153,7 +132,7 @@ fun JogPad(
 fun JogDirectionButton(
     label: String,
     active: Boolean,
-    width: androidx.compose.ui.unit.Dp = 74.dp,
+    size: androidx.compose.ui.unit.Dp = 64.dp,
     holdToRun: Boolean,
     incremental: Boolean,
     onJogChanged: (String?) -> Unit,
@@ -179,7 +158,7 @@ fun JogDirectionButton(
 
     Box(
         modifier = Modifier
-            .size(width, 48.dp)
+            .size(size)
             .clip(RoundedCornerShape(12.dp))
             .background(backgroundColor)
             .border(
@@ -191,37 +170,20 @@ fun JogDirectionButton(
                 detectTapGestures(
                     onPress = {
                         if (incremental) {
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress
-                            )
-
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             latestOnIncrementalJog(label)
-
                         } else if (holdToRun) {
                             latestOnJogChanged(label)
-
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress
-                            )
-
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             try {
                                 tryAwaitRelease()
                             } finally {
-                                // Always request a stop when the press ends
-                                // or its pointer interaction is cancelled.
                                 latestOnJogChanged(null)
                             }
-
                         } else {
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress
-                            )
-
-                            if (latestActive) {
-                                latestOnJogChanged(null)
-                            } else {
-                                latestOnJogChanged(label)
-                            }
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (latestActive) latestOnJogChanged(null)
+                            else latestOnJogChanged(label)
                         }
                     }
                 )
