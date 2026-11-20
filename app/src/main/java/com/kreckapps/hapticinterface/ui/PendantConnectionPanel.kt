@@ -336,17 +336,7 @@ fun PendantConnectionPanel(
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = connectionMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = when {
-                        !currentStatus.connected -> "Pendant mode: Not connected"
-                        currentStatus.pendantInControl == true -> "Pendant mode: In control"
-                        currentStatus.pendantInControl == false -> "Pendant mode: Listening"
-                        else -> "Pendant mode: Waiting for controller…"
-                    },
+                    text = "Connection: $connectionMessage",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
