@@ -152,6 +152,29 @@ fun OptionButtons(
 }
 
 @Composable
+fun PanelActionChip(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    FilterChip(
+        selected = false,
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        label = {
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    )
+}
+
+@Composable
 fun SpeedControl(
     label: String,
     speed: Float,
