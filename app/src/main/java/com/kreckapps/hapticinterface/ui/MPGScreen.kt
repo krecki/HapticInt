@@ -95,7 +95,8 @@ fun MPGScreen(
                 OptionButtons(
                     options = listOf("X", "Y", "Z"),
                     selected = axis,
-                    onSelected = onAxisChanged
+                    onSelected = onAxisChanged,
+                    compact = true
                 )
             }
         }
@@ -114,7 +115,8 @@ fun MPGScreen(
                 OptionButtons(
                     options = resolutionOptions,
                     selected = displayedResolution,
-                    onSelected = onResolutionChanged
+                    onSelected = onResolutionChanged,
+                    compact = true
                 )
             }
         }
