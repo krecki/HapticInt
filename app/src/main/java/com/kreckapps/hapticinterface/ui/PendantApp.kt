@@ -527,19 +527,13 @@ fun PendantApp() {
                         Text("Active Work Coordinate System", style = MaterialTheme.typography.titleSmall)
                         TextButton(onClick = { wcsPanelExpanded = false }) { Text("Hide") }
                     }
-                    Row(
+                    OptionButtons(
+                        options = listOf("G54", "G55", "G56", "G57", "G58", "G59"),
+                        selected = machineStatus.position.activeWcs,
+                        onSelected = { wcs -> selectWcsAction?.invoke(wcs) },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf("G54", "G55", "G56", "G57", "G58", "G59").forEach { wcs ->
-                            FilterChip(
-                                selected = machineStatus.position.activeWcs == wcs,
-                                enabled = !coordinateCommandBusy,
-                                onClick = { selectWcsAction?.invoke(wcs) },
-                                label = { Text(wcs) }
-                            )
-                        }
-                    }
+                        compact = true
+                    )
                 }
             } else {
                 Box(
