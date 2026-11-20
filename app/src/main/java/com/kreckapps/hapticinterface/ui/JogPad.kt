@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun JogPad(
+    modifier: Modifier = Modifier,
     activeJog: String? = null,
     onJogChanged: (String?) -> Unit = {},
     holdToRun: Boolean = false,
@@ -28,6 +29,7 @@ fun JogPad(
     onStop: (() -> Unit)? = null
 ) {
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
