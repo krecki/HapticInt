@@ -64,7 +64,11 @@ fun ContinuousJogScreen(
             contentAlignment = Alignment.Center
         ) {
             Column {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Feed Rate", fontWeight = FontWeight.Normal)
                     Text(
                         text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
