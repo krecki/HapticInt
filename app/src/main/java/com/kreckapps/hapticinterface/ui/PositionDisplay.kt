@@ -125,22 +125,44 @@ fun PositionDisplay(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "Machine Position",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            val controllerStatus = when {
-                !status.connected -> "Disconnected"
-                status.pendantInControl == true -> "In control"
-                status.pendantInControl == false -> "Listening"
-                else -> "Waiting"
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text(
+                    text = "Machine Position",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = position.activeWcs,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            val statusColor = when {
-                !status.connected -> MaterialTheme.colorScheme.onSurfaceVariant
-                status.pendantInControl == true -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.tertiary
+
+            val normalizedState = status.machineState.substringBefore(':').trim()
+            val machineStateLabel = when {
+                !status.connected -> "Disconnected"
+                normalizedState.equals("Idle", ignoreCase = true) -> "Idle"
+                normalizedState.equals("Jog", ignoreCase = true) -> "Jogging"
+                normalizedState.equals("Run", ignoreCase = true) -> "Running"
+                normalizedState.equals("Hold", ignoreCase = true) -> "Hold"
+                normalizedState.equals("Alarm", ignoreCase = true) -> "Alarm"
+                normalizedState.equals("Door", ignoreCase = true) -> "Door"
+                normalizedState.equals("Home", ignoreCase = true) -> "Homing"
+                normalizedState.equals("Check", ignoreCase = true) -> "Check"
+                normalizedState.equals("Sleep", ignoreCase = true) -> "Sleep"
+                normalizedState.equals("Tool", ignoreCase = true) -> "Tool change"
+                else -> if (normalizedState.isNotBlank()) normalizedState else "Waiting"
+            }
+            val statusColor = when (machineStateLabel) {
+                "Disconnected", "Waiting" -> MaterialTheme.colorScheme.onSurfaceVariant
+                "Alarm" -> MaterialTheme.colorScheme.error
+                "Jogging", "Running", "Homing" -> MaterialTheme.colorScheme.primary
+                "Hold", "Door" -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurface
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -152,7 +174,7 @@ fun PositionDisplay(
                         .background(statusColor, RoundedCornerShape(50))
                 )
                 Text(
-                    text = controllerStatus,
+                    text = machineStateLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = statusColor
                 )
@@ -276,17 +298,5 @@ fun PositionDisplay(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = if (isWorkDisplay) position.activeWcs else "Machine coordinates",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
     }
 }
