@@ -62,12 +62,14 @@ fun IncrementalJogScreen(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth().height(88.dp),
+            contentAlignment = Alignment.Center
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
             for (axis in listOf("X", "Y", "Z")) {
 
                 var fieldValue by remember(axis) {
@@ -146,11 +148,15 @@ fun IncrementalJogScreen(
                 )
             }
         }
+        }
 
-        Spacer(modifier = Modifier.height(6.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
 
+        Box(
+            modifier = Modifier.fillMaxWidth().height(96.dp),
+            contentAlignment = Alignment.Center
+        ) {
+        Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -179,10 +185,10 @@ fun IncrementalJogScreen(
             },
             valueRange = minFeedRate..maxFeedRate,
         )
+        }
+        }
 
-        Spacer(modifier = Modifier.height(6.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
 
         Box(
             modifier = Modifier
