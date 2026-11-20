@@ -14,8 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -146,7 +145,7 @@ fun RotaryWheel(
     onDragFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     val latestPosition by rememberUpdatedState(position)
     val latestPositionCallback by rememberUpdatedState(onPositionChanged)
@@ -230,9 +229,7 @@ fun RotaryWheel(
                             sentJogDuringDrag = true
                             accumulatedAngle -= detentAngle
 
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress
-                            )
+                            performAppHaptic(context)
                         }
 
                         while (accumulatedAngle <= -detentAngle) {
