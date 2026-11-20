@@ -175,14 +175,14 @@ fun JogDirectionButton(
                             latestOnIncrementalJog(label)
                         } else if (holdToRun) {
                             latestOnJogChanged(label)
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            performAppHaptic(context)
                             try {
                                 tryAwaitRelease()
                             } finally {
                                 latestOnJogChanged(null)
                             }
                         } else {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            performAppHaptic(context)
                             if (latestActive) latestOnJogChanged(null)
                             else latestOnJogChanged(label)
                         }
