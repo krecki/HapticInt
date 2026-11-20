@@ -39,7 +39,6 @@ fun ContinuousJogScreen(
     val isMetric = displayUnits == MachineUnits.MILLIMETERS
     val minFeedRate = if (isMetric) 25f else 1f
     val maxFeedRate = if (isMetric) MAX_CONTINUOUS_FEED_MM_MIN else 98f
-    val sliderSteps = if (isMetric) 98 else 96
     val safeSpeed = speed.roundToInt().toFloat().coerceIn(minFeedRate, maxFeedRate)
 
     Column(
@@ -90,7 +89,6 @@ fun ContinuousJogScreen(
             value = safeSpeed,
             onValueChange = onSpeedChanged,
             valueRange = minFeedRate..maxFeedRate,
-            steps = sliderSteps
         )
 
 
