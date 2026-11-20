@@ -15,12 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
 
 private const val MM_PER_INCH = 25.4f
-private const val MAX_FEED_MM_MIN = 2000f
+private const val MAX_FEED_MM_MIN = 2500f
 
 @Composable
 fun PendantApp() {
@@ -35,7 +36,7 @@ fun PendantApp() {
 
     // One shared feed rate, always stored internally in mm/min.
     var jogFeedRateMmMin by remember {
-        mutableFloatStateOf(1000f)
+        mutableFloatStateOf(1250f)
     }
 
     // Continuous jogging settings
@@ -120,32 +121,23 @@ fun PendantApp() {
     val displayedFeedRate = if (
         displayUnits == MachineUnits.MILLIMETERS
     ) {
-        jogFeedRateMmMin
+        (jogFeedRateMmMin / 25f).roundToInt() * 25f
     } else {
-        jogFeedRateMmMin / MM_PER_INCH
+        (jogFeedRateMmMin / MM_PER_INCH).roundToInt().toFloat()
     }
 
     val maximumDisplayedFeedRate = if (
         displayUnits == MachineUnits.MILLIMETERS
-    ) {
-        MAX_FEED_MM_MIN
-    } else {
-        MAX_FEED_MM_MIN / MM_PER_INCH
-    }
+    ) MAX_FEED_MM_MIN else 98f
+
+    val minimumDisplayedFeedRate = if (
+        displayUnits == MachineUnits.MILLIMETERS
+    ) 25f else 1f
 
     fun updateDisplayedFeedRate(value: Float) {
-        val safeValue = value.coerceIn(
-            1f,
-            maximumDisplayedFeedRate
-        )
-
-        jogFeedRateMmMin = if (
-            displayUnits == MachineUnits.MILLIMETERS
-        ) {
-            safeValue
-        } else {
-            safeValue * MM_PER_INCH
-        }
+        val safeValue = value.coerceIn(minimumDisplayedFeedRate, maximumDisplayedFeedRate)
+            .roundToInt().toFloat()
+        jogFeedRateMmMin = if (displayUnits == MachineUnits.MILLIMETERS) safeValue else safeValue * MM_PER_INCH
     }
 
     fun configureSelectedJogMode(mode: Int) {
@@ -156,7 +148,7 @@ fun PendantApp() {
             (axisSteps["X"]?.toDoubleOrNull() ?: 0.01) *
                     if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
         }
-        val feedMmMin = if (mode == 0) 2000.0 else jogFeedRateMmMin.toDouble()
+        val feedMmMin = if (mode == 0) 2500.0 else jogFeedRateMmMin.toDouble()
         jogModeConfigurationAction?.invoke(mode, stepMm, feedMmMin)
     }
 
