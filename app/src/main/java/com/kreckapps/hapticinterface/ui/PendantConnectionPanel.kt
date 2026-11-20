@@ -71,10 +71,6 @@ fun PendantConnectionPanel(
         mutableStateOf("Not connected")
     }
 
-    var currentStatus by remember {
-        mutableStateOf(MachineStatus())
-    }
-
     var commandBusy by remember {
         mutableStateOf(false)
     }
@@ -84,7 +80,6 @@ fun PendantConnectionPanel(
             bluetooth = bluetoothManager,
 
             onStatusChanged = { newStatus ->
-                currentStatus = newStatus
                 latestStatusCallback.value(newStatus)
             },
 
