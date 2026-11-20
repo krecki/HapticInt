@@ -11,12 +11,8 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.MachineUnits
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 
 private const val MAX_CONTINUOUS_FEED_MM_MIN = 2500f
-private const val MM_PER_INCH = 25.4f
 
 @Composable
 fun ContinuousJogScreen(
@@ -30,12 +26,7 @@ fun ContinuousJogScreen(
     onJogRequest: (String, Double, MachineUnits) -> Unit,
     onStopJog: () -> Unit
 ) {
-    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
-        "mm/min"
-    } else {
-        "in/min"
-    }
-
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) "mm/min" else "in/min"
     val isMetric = displayUnits == MachineUnits.MILLIMETERS
     val minFeedRate = if (isMetric) 25f else 1f
     val maxFeedRate = if (isMetric) MAX_CONTINUOUS_FEED_MM_MIN else 98f
@@ -45,79 +36,65 @@ fun ContinuousJogScreen(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(6.dp))
-
-        OptionButtons(
-            options = listOf("Hold to Run", "Tap to Toggle"),
-            selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
-            onSelected = {
-                if (activeJog != null) {
-                    onStopJog()
-                    onJogChanged(null)
-                }
-
-                onHoldToRunChanged(it == "Hold to Run")
-            }
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxWidth().height(88.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Feed Rate: ",
-                fontWeight = FontWeight.Normal
+            OptionButtons(
+                options = listOf("Hold to Run", "Tap to Toggle"),
+                selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
+                onSelected = {
+                    if (activeJog != null) {
+                        onStopJog()
+                        onJogChanged(null)
+                    }
+                    onHoldToRunChanged(it == "Hold to Run")
+                }
             )
-
-            Text(
-                text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Normal
-            )
-
         }
 
-        Slider(
-            value = safeSpeed,
-            onValueChange = onSpeedChanged,
-            valueRange = minFeedRate..maxFeedRate,
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
 
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(96.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Feed Rate:", fontWeight = FontWeight.Normal)
+                    Text(
+                        text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+                Slider(
+                    value = safeSpeed,
+                    onValueChange = onSpeedChanged,
+                    valueRange = minFeedRate..maxFeedRate
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center
         ) {
             JogPad(
                 activeJog = activeJog,
                 onJogChanged = { direction ->
                     onJogChanged(direction)
-
-                    if (direction == null) {
-                        onStopJog()
-                    } else {
-                        onJogRequest(
-                            direction,
-                            safeSpeed.toDouble(),
-                            displayUnits
-                        )
-                    }
+                    if (direction == null) onStopJog()
+                    else onJogRequest(direction, safeSpeed.toDouble(), displayUnits)
                 },
                 holdToRun = holdToRun
             )
         }
-
     }
 }
