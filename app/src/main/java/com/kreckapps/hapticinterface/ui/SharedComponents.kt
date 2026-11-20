@@ -2,6 +2,7 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun ModeTab(
@@ -43,6 +45,7 @@ fun ModeTab(
             text = text,
             modifier = Modifier.fillMaxWidth(),
             fontSize = 12.sp,
+            letterSpacing = 0.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             color = if (selected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -52,11 +55,17 @@ fun ModeTab(
 }
 
 @Composable
-fun SectionTitle(text: String) {
+fun PanelSectionTitle(
+    text: String,
+    modifier: Modifier = Modifier
+) {
     Text(
         text = text,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold
+        modifier = modifier,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Normal,
+        letterSpacing = 0.sp,
+        color = MaterialTheme.colorScheme.onSurface
     )
 }
 
@@ -65,33 +74,77 @@ fun OptionButtons(
     options: List<String>,
     selected: String,
     onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        options.forEach { option ->
-            val buttonModifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-
-            if (option == selected) {
-                Button(
-                    onClick = { onSelected(option) },
-                    modifier = buttonModifier,
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+    if (compact) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(9.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(9.dp)
+                )
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            options.forEach { option ->
+                val isSelected = option == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                            else Color.Transparent
+                        )
+                        .clickable { onSelected(option) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(option, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    Text(
+                        text = option,
+                        fontSize = 12.sp,
+                        letterSpacing = 0.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
-            } else {
-                OutlinedButton(
-                    onClick = { onSelected(option) },
-                    modifier = buttonModifier,
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
-                ) {
-                    Text(option, fontSize = 12.sp, textAlign = TextAlign.Center)
+            }
+        }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            options.forEach { option ->
+                val buttonModifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+
+                if (option == selected) {
+                    Button(
+                        onClick = { onSelected(option) },
+                        modifier = buttonModifier,
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+                    ) {
+                        Text(option, fontSize = 12.sp, letterSpacing = 0.sp, textAlign = TextAlign.Center)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSelected(option) },
+                        modifier = buttonModifier,
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+                    ) {
+                        Text(option, fontSize = 12.sp, letterSpacing = 0.sp, textAlign = TextAlign.Center)
+                    }
                 }
             }
         }
