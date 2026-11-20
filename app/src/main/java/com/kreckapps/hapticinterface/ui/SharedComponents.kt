@@ -62,8 +62,10 @@ fun PanelSectionTitle(
     Text(
         text = text,
         modifier = modifier,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Normal,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+//        fontSize = 16.sp,
+//        fontWeight = FontWeight.Normal,
         letterSpacing = 0.sp,
         color = MaterialTheme.colorScheme.onSurface
     )

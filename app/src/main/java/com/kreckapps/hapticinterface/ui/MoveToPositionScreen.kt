@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.text.font.FontWeight
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
@@ -61,7 +62,9 @@ fun MoveToPositionScreen(
     ) {
         Text(
             coordinateLabel,
-            style = MaterialTheme.typography.titleSmall
+//            style = MaterialTheme.typography.titleSmall
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
 
         listOf('X', 'Y', 'Z').forEachIndexed { index, axis ->
