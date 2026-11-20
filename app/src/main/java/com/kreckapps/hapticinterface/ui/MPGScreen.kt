@@ -38,7 +38,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.PI
@@ -241,9 +240,7 @@ fun RotaryWheel(
                             sentJogDuringDrag = true
                             accumulatedAngle += detentAngle
 
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress
-                            )
+                            performAppHaptic(context)
                         }
 
                         change.consume()
