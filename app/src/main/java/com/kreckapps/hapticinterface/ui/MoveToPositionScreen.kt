@@ -126,7 +126,8 @@ fun MoveToPositionScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    PanelActionChip(
+                        text = "Go to Position",
                         onClick = {
                             focusManager.clearFocus()
 
@@ -145,20 +146,17 @@ fun MoveToPositionScreen(
                                     ?.isFinite() == true
                                 ),
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Go to Position")
-                    }
+                    )
 
-                    OutlinedButton(
+                    PanelActionChip(
+                        text = "Go to Zero",
                         onClick = {
                             focusManager.clearFocus()
                             onMoveToZero(axis)
                         },
                         enabled = enabled,
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Go to Zero")
-                    }
+                    )
                 }
             }
 
