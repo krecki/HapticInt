@@ -66,7 +66,6 @@ fun MPGScreen(
     } else {
         listOf("0.0005", "0.005", "0.05")
     }
-
     val mpgFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
         2500.0
     } else {
@@ -74,80 +73,62 @@ fun MPGScreen(
     }
 
     LaunchedEffect(displayUnits) {
-        if (resolution !in resolutionOptions) {
-            onResolutionChanged(resolutionOptions.first())
-        }
+        if (resolution !in resolutionOptions) onResolutionChanged(resolutionOptions.first())
     }
 
-    val displayedResolution =
-        resolution.takeIf { it in resolutionOptions }
-            ?: resolutionOptions.first()
-
-    val unitLabel =
-        if (displayUnits == MachineUnits.MILLIMETERS) "mm" else "in"
+    val displayedResolution = resolution.takeIf { it in resolutionOptions } ?: resolutionOptions.first()
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) "mm" else "in"
 
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(88.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Selected Axis", fontWeight = FontWeight.Normal)
+                OptionButtons(
+                    options = listOf("X", "Y", "Z"),
+                    selected = axis,
+                    onSelected = onAxisChanged
+                )
+            }
+        }
 
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = "Selected Axis",
-            fontWeight = FontWeight.Normal
-        )
-
-        OptionButtons(
-            options = listOf("X", "Y", "Z"),
-            selected = axis,
-            onSelected = onAxisChanged
-        )
-
-        Spacer(Modifier.height(6.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
 
-        Text(
-            text = "Distance per detent ($unitLabel)",
-            fontWeight = FontWeight.Normal
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth().height(96.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Distance per detent ($unitLabel)", fontWeight = FontWeight.Normal)
+                OptionButtons(
+                    options = resolutionOptions,
+                    selected = displayedResolution,
+                    onSelected = onResolutionChanged
+                )
+            }
+        }
 
-        OptionButtons(
-            options = resolutionOptions,
-            selected = displayedResolution,
-            onSelected = onResolutionChanged
-        )
-
-        Spacer(Modifier.height(6.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(modifier = Modifier.height(6.dp))
 
         RotaryWheel(
             position = position,
             onPositionChanged = onPositionChanged,
             onDetent = { direction ->
                 val distance = displayedResolution.toDoubleOrNull()
-
                 if (distance != null && distance > 0.0) {
-                    val signedDistance = distance * direction
-
-                    onJogRequest(
-                        axis.first(),
-                        signedDistance,
-                        mpgFeedRate,
-                        displayUnits
-                    )
+                    onJogRequest(axis.first(), distance * direction, mpgFeedRate, displayUnits)
                 }
             },
             onDragFinished = onJogCancel,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            modifier = Modifier.fillMaxWidth().weight(1f)
         )
     }
 }
-
 
 @Composable
 fun RotaryWheel(
