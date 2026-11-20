@@ -59,7 +59,7 @@ fun IncrementalJogScreen(
     val focusManager = LocalFocusManager.current
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(6.dp))
@@ -186,53 +186,60 @@ fun IncrementalJogScreen(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(6.dp))
 
-        JogPad(
-            incremental = true,
-            onIncrementalJog = { direction ->
-                focusManager.clearFocus()
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            JogPad(
+                incremental = true,
+                onIncrementalJog = { direction ->
+                    focusManager.clearFocus()
 
-                val axis = direction.last()
-                val step = axisSteps[axis.toString()]
-                    ?: if (displayUnits == MachineUnits.MILLIMETERS)
-                        "10"
-                    else
-                        "0.375"
+                    val axis = direction.last()
+                    val step = axisSteps[axis.toString()]
+                        ?: if (displayUnits == MachineUnits.MILLIMETERS)
+                            "10"
+                        else
+                            "0.375"
 
-                val stepValue = step.toDoubleOrNull()
+                    val stepValue = step.toDoubleOrNull()
 
-                if (
-                    stepValue != null &&
-                    stepValue.isFinite() &&
-                    stepValue > 0.0
-                ) {
-                    val signedDistance =
-                        if (direction.startsWith("-")) {
-                            -stepValue
-                        } else {
-                            stepValue
-                        }
+                    if (
+                        stepValue != null &&
+                        stepValue.isFinite() &&
+                        stepValue > 0.0
+                    ) {
+                        val signedDistance =
+                            if (direction.startsWith("-")) {
+                                -stepValue
+                            } else {
+                                stepValue
+                            }
 
-                    onCommand(
-                        "Jog $direction: $step $unitLabel at " +
-                                "${safeFeedRate.toInt()} $feedUnit"
-                    )
+                        onCommand(
+                            "Jog $direction: $step $unitLabel at " +
+                                    "\${safeFeedRate.toInt()} $feedUnit"
+                        )
 
-                    onJogRequest(
-                        axis,
-                        signedDistance,
-                        safeFeedRate.toDouble(),
-                        displayUnits
-                    )
-                } else {
-                    onCommand("Invalid step size for axis $axis")
+                        onJogRequest(
+                            axis,
+                            signedDistance,
+                            safeFeedRate.toDouble(),
+                            displayUnits
+                        )
+                    } else {
+                        onCommand("Invalid step size for axis $axis")
+                    }
+                },
+                onStop = {
+                    focusManager.clearFocus()
+                    onJogCancel()
+                    onCommand("Jog cancel requested")
                 }
-            },
-            onStop = {
-                focusManager.clearFocus()
-                onJogCancel()
-                onCommand("Jog cancel requested")
-            }
-        )
+            )
+        }
     }
 }
 
