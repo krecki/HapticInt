@@ -146,15 +146,15 @@ fun JogDirectionButton(
     val latestOnIncrementalJog by rememberUpdatedState(onIncrementalJog)
 
     val backgroundColor = if (active) {
-        MaterialTheme.colorScheme.primary
+        PendantColors.jogButtonActive
     } else {
-        MaterialTheme.colorScheme.secondaryContainer
+        PendantColors.jogButton
     }
 
     val contentColor = if (active) {
-        MaterialTheme.colorScheme.onPrimary
+        PendantColors.onJogButtonActive
     } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
+        PendantColors.onJogButton
     }
 
     Box(
@@ -164,7 +164,7 @@ fun JogDirectionButton(
             .background(backgroundColor)
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outline,
+                color = PendantColors.outlineVariant,
                 shape = RoundedCornerShape(12.dp)
             )
             .pointerInput(label, holdToRun, incremental) {
