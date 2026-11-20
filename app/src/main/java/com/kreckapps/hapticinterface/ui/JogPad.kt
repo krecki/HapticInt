@@ -35,8 +35,7 @@ fun JogPad(
         val verticalGap = 6.dp
         val availableCellWidth = (maxWidth - horizontalGap * 3) / 4
         val availableCellHeight = (maxHeight - verticalGap * 2) / 3
-        val cellSize = minOf(72.dp, availableCellWidth, availableCellHeight)
-            .coerceAtLeast(40.dp)
+        val cellSize = minOf(availableCellWidth, availableCellHeight)
 
         Column(
             verticalArrangement = Arrangement.spacedBy(verticalGap),
