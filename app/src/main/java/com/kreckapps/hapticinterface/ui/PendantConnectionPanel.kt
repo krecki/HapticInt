@@ -305,7 +305,8 @@ fun PendantConnectionPanel(
                             enabled = false,
                             modifier = Modifier.weight(1f),
                             containerColor = PendantColors.actionNeutralContainer,
-                            labelColor = PendantColors.onActionNeutralContainer
+                            labelColor = PendantColors.onActionNeutralContainer,
+                            minHeight = 48.dp
                         )
                     }
                     PendantBluetoothManager.ConnectionState.CONNECTED -> {
@@ -314,7 +315,8 @@ fun PendantConnectionPanel(
                             onClick = { connectOrDisconnect() },
                             modifier = Modifier.weight(1f),
                             containerColor = PendantColors.actionDangerContainer,
-                            labelColor = PendantColors.onActionDangerContainer
+                            labelColor = PendantColors.onActionDangerContainer,
+                            minHeight = 48.dp
                         )
                     }
                     else -> {
@@ -323,7 +325,8 @@ fun PendantConnectionPanel(
                             onClick = { connectOrDisconnect() },
                             modifier = Modifier.weight(1f),
                             containerColor = PendantColors.actionPrimaryContainer,
-                            labelColor = PendantColors.onActionPrimaryContainer
+                            labelColor = PendantColors.onActionPrimaryContainer,
+                            minHeight = 48.dp
                         )
                     }
                 }
@@ -332,7 +335,8 @@ fun PendantConnectionPanel(
                     onClick = { commandController.homeMachine() },
                     modifier = Modifier.weight(1f),
                     containerColor = PendantColors.actionSecondaryContainer,
-                    labelColor = PendantColors.onActionSecondaryContainer
+                    labelColor = PendantColors.onActionSecondaryContainer,
+                    minHeight = 48.dp
                 )
             }
 
