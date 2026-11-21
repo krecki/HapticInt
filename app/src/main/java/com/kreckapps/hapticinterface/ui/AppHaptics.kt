@@ -1,23 +1,37 @@
 package com.kreckapps.hapticinterface.ui
 
 import android.content.Context
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 
 /**
- * Requests a short vibration directly from Android rather than using Compose's
- * system touch-feedback effect. This keeps pendant haptics separate from
- * navigation-bar and general touch-feedback settings on supported devices.
+ * Short, crisp app haptics. MPG detents are rate-limited so rapid wheel turns
+ * do not become one continuous-feeling vibration.
  */
-fun performAppHaptic(context: Context) {
+private object AppHapticLimiter {
+    private var lastMpgPulseAt = 0L
+
+    @Synchronized
+    fun allowMpgPulse(now: Long): Boolean {
+        if (now - lastMpgPulseAt < 50L) return false
+        lastMpgPulseAt = now
+        return true
+    }
+}
+
+fun performAppHaptic(context: Context, mpgDetent: Boolean = false) {
+    val now = SystemClock.elapsedRealtime()
+    if (mpgDetent && !AppHapticLimiter.allowMpgPulse(now)) return
+
     val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         ?: return
 
     if (vibrator.hasVibrator()) {
         vibrator.vibrate(
             VibrationEffect.createOneShot(
-                18L,
-                VibrationEffect.DEFAULT_AMPLITUDE
+                if (mpgDetent) 22L else 20L,
+                255
             )
         )
     }
