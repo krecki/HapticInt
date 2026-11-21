@@ -290,6 +290,11 @@ fun PendantConnectionPanel(
             }
     ) {
         if (expanded) {
+            PanelSectionTitle(
+                text = "Connection",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
