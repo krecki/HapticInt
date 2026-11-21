@@ -240,7 +240,7 @@ fun RotaryWheel(
                             sentJogDuringDrag = true
                             accumulatedAngle += detentAngle
 
-                            performAppHaptic(context)
+                            performAppHaptic(context, mpgDetent = true)
                         }
 
                         change.consume()
