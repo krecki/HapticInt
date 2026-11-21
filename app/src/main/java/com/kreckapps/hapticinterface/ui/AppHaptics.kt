@@ -14,7 +14,7 @@ private object AppHapticLimiter {
 
     @Synchronized
     fun allowMpgPulse(now: Long): Boolean {
-        if (now - lastMpgPulseAt < 25L) return false
+        if (now - lastMpgPulseAt < 22L) return false
         lastMpgPulseAt = now
         return true
     }
@@ -30,7 +30,7 @@ fun performAppHaptic(context: Context, mpgDetent: Boolean = false) {
     if (vibrator.hasVibrator()) {
         vibrator.vibrate(
             VibrationEffect.createOneShot(
-                if (mpgDetent) 22L else 20L,
+                if (mpgDetent) 22L else 40L,
                 255
             )
         )
