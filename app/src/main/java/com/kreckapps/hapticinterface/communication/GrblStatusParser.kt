@@ -1,6 +1,5 @@
 package com.kreckapps.hapticinterface.communication
 
-import com.kreckapps.hapticinterface.model.MachinePosition
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
 import com.kreckapps.hapticinterface.model.DistanceMode
