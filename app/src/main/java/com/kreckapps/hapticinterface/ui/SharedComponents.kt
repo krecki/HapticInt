@@ -162,13 +162,14 @@ fun PanelActionChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     containerColor: Color = PendantColors.actionSecondaryContainer,
-    labelColor: Color = PendantColors.onActionSecondaryContainer
+    labelColor: Color = PendantColors.onActionSecondaryContainer,
+    minHeight: androidx.compose.ui.unit.Dp = 40.dp
 ) {
     FilterChip(
         selected = false,
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier.heightIn(min = minHeight),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = containerColor,
             labelColor = labelColor,
@@ -186,6 +187,7 @@ fun PanelActionChip(
         label = {
             Text(
                 text = text,
+                modifier = Modifier.fillMaxWidth(),
                 fontSize = 12.sp,
                 letterSpacing = 0.sp,
                 textAlign = TextAlign.Center
