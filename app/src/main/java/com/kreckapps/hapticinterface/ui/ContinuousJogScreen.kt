@@ -4,14 +4,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
+import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.MachineUnits
 
-private const val MAX_CONTINUOUS_FEED_MM_MIN = 2000f
-private const val MM_PER_INCH = 25.4f
+private const val MAX_CONTINUOUS_FEED_MM_MIN = 2500f
 
 @Composable
 fun ContinuousJogScreen(
@@ -25,116 +27,86 @@ fun ContinuousJogScreen(
     onJogRequest: (String, Double, MachineUnits) -> Unit,
     onStopJog: () -> Unit
 ) {
-    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) {
-        "mm/min"
-    } else {
-        "in/min"
-    }
-
-    val maxFeedRate = if (displayUnits == MachineUnits.MILLIMETERS) {
-        MAX_CONTINUOUS_FEED_MM_MIN
-    } else {
-        MAX_CONTINUOUS_FEED_MM_MIN / MM_PER_INCH
-    }
-
-    val safeSpeed = speed.coerceIn(1f, maxFeedRate)
+    val unitLabel = if (displayUnits == MachineUnits.MILLIMETERS) "mm/min" else "in/min"
+    val isMetric = displayUnits == MachineUnits.MILLIMETERS
+    val minFeedRate = if (isMetric) 25f else 1f
+    val maxFeedRate = if (isMetric) MAX_CONTINUOUS_FEED_MM_MIN else 98f
+    val safeSpeed = speed.roundToInt().toFloat().coerceIn(minFeedRate, maxFeedRate)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionTitle("Continuous Jogging")
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = if (holdToRun) {
-                "Press and hold a direction to jog"
-            } else {
-                "Tap a direction to start or stop jogging"
-            },
-            fontSize = 14.sp
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OptionButtons(
-            options = listOf("Hold to Run", "Tap to Toggle"),
-            selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
-            onSelected = {
-                if (activeJog != null) {
-                    onStopJog()
-                    onJogChanged(null)
-                }
-
-                onHoldToRunChanged(it == "Hold to Run")
+        Box(
+            modifier = Modifier.fillMaxWidth().height(88.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                PanelSectionTitle("Jog Mode")
+                OptionButtons(
+                    options = listOf("Hold to Run", "Tap to Toggle"),
+                    selected = if (holdToRun) "Hold to Run" else "Tap to Toggle",
+                    onSelected = {
+                        if (activeJog != null) {
+                            onStopJog()
+                            onJogChanged(null)
+                        }
+                        onHoldToRunChanged(it == "Hold to Run")
+                    },
+                    compact = true
+                )
             }
-        )
+        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
 
-        Text(
-            text = "Shared Jog Feed Rate",
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            text = "${safeSpeed.toInt()} $unitLabel",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Slider(
-            value = safeSpeed,
-            onValueChange = onSpeedChanged,
-            valueRange = 1f..maxFeedRate
-        )
-
-        Text(
-            text = "Maximum: ${maxFeedRate.toInt()} $unitLabel",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        JogPad(
-            activeJog = activeJog,
-            onJogChanged = { direction ->
-                onJogChanged(direction)
-
-                if (direction == null) {
-                    onStopJog()
-                } else {
-                    onJogRequest(
-                        direction,
-                        safeSpeed.toDouble(),
-                        displayUnits
+        Box(
+            modifier = Modifier.fillMaxWidth().height(96.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PanelSectionTitle("Feed Rate")
+                    Text(
+                        text = "${String.format(Locale.US, "%.0f", safeSpeed)} $unitLabel",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.sp
                     )
                 }
-            },
-            holdToRun = holdToRun
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Text(
-            text = if (activeJog == null) {
-                "Jog inactive"
-            } else {
-                "Currently jogging: $activeJog"
-            },
-            fontWeight = FontWeight.Bold,
-            color = if (activeJog == null) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.primary
+                Slider(
+                    value = safeSpeed,
+                    onValueChange = onSpeedChanged,
+                    valueRange = minFeedRate..maxFeedRate
+                )
             }
-        )
+        }
 
-        Text(
-            text = "Feed rate: ${safeSpeed.toInt()} $unitLabel",
-            fontSize = 14.sp
-        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            JogPad(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(scaleX = 0.90f, scaleY = 0.90f),
+                activeJog = activeJog,
+                onJogChanged = { direction ->
+                    onJogChanged(direction)
+                    if (direction == null) onStopJog()
+                    else onJogRequest(direction, safeSpeed.toDouble(), displayUnits)
+                },
+                holdToRun = holdToRun
+            )
+        }
     }
 }

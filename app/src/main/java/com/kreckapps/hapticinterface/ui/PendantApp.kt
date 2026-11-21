@@ -1,38 +1,43 @@
 package com.kreckapps.hapticinterface.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
 
 private const val MM_PER_INCH = 25.4f
-private const val MAX_FEED_MM_MIN = 2000f
+private const val MAX_FEED_MM_MIN = 2500f
 
 @Composable
 fun PendantApp() {
     var selectedMode by remember { mutableIntStateOf(0) }
-    var settingsOpen by remember { mutableStateOf(false) }
+    var wcsPanelExpanded by remember { mutableStateOf(false) }
+    var topPanelExpanded by remember { mutableStateOf(false) }
 
     // MPG settings and state
-    var pulsesPerRev by remember { mutableIntStateOf(50) }
     var mpgPosition by remember { mutableIntStateOf(0) }
-    var mpgResolution by remember { mutableStateOf("0.001") }
+    var mpgResolution by remember { mutableStateOf("0.01") }
     var mpgAxis by remember { mutableStateOf("X") }
 
     // One shared feed rate, always stored internally in mm/min.
     var jogFeedRateMmMin by remember {
-        mutableFloatStateOf(50f)
+        mutableFloatStateOf(1250f)
     }
 
     // Continuous jogging settings
@@ -67,6 +72,12 @@ fun PendantApp() {
         mutableStateOf<((Char, Double) -> Unit)?>(null)
     }
 
+    var selectWcsAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
+
+    var moveAxisAction by remember {
+        mutableStateOf<((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?>(null)
+    }
+
     var incrementalJogAction by remember {
         mutableStateOf<
                 ((Char, Double, Double, MachineUnits) -> Unit)?
@@ -83,6 +94,12 @@ fun PendantApp() {
         mutableStateOf<(() -> Unit)?>(null)
     }
 
+    var jogModeConfigurationAction by remember {
+        mutableStateOf<((Int, Double, Double) -> Unit)?>(null)
+    }
+
+    var wasConnected by remember { mutableStateOf(false) }
+
     var coordinateCommandBusy by remember {
         mutableStateOf(false)
     }
@@ -90,11 +107,12 @@ fun PendantApp() {
     // Incremental jogging step sizes remain independent per axis.
     val axisSteps = remember {
         mutableStateMapOf(
-            "X" to "0.01",
-            "Y" to "0.01",
-            "Z" to "0.01"
+            "X" to "0.375",
+            "Y" to "0.375",
+            "Z" to "0.375"
         )
     }
+    val customStepAxes = remember { mutableStateListOf<String>() }
 
     var lastIncrementalCommand by remember {
         mutableStateOf("No jog command yet")
@@ -104,31 +122,56 @@ fun PendantApp() {
     val displayedFeedRate = if (
         displayUnits == MachineUnits.MILLIMETERS
     ) {
-        jogFeedRateMmMin
+        (jogFeedRateMmMin / 25f).roundToInt() * 25f
     } else {
-        jogFeedRateMmMin / MM_PER_INCH
+        (jogFeedRateMmMin / MM_PER_INCH).roundToInt().toFloat()
     }
 
     val maximumDisplayedFeedRate = if (
         displayUnits == MachineUnits.MILLIMETERS
-    ) {
-        MAX_FEED_MM_MIN
-    } else {
-        MAX_FEED_MM_MIN / MM_PER_INCH
-    }
+    ) MAX_FEED_MM_MIN else 98f
+
+    val minimumDisplayedFeedRate = if (
+        displayUnits == MachineUnits.MILLIMETERS
+    ) 25f else 1f
 
     fun updateDisplayedFeedRate(value: Float) {
-        val safeValue = value.coerceIn(
-            1f,
+        val increment = if (displayUnits == MachineUnits.MILLIMETERS) 25f else 1f
+        val safeValue = (value / increment).roundToInt() * increment
+        val clampedValue = safeValue.coerceIn(
+            minimumDisplayedFeedRate,
             maximumDisplayedFeedRate
         )
-
-        jogFeedRateMmMin = if (
-            displayUnits == MachineUnits.MILLIMETERS
-        ) {
-            safeValue
+        jogFeedRateMmMin = if (displayUnits == MachineUnits.MILLIMETERS) {
+            clampedValue
         } else {
-            safeValue * MM_PER_INCH
+            clampedValue * MM_PER_INCH
+        }
+    }
+
+    fun configureSelectedJogMode(mode: Int) {
+        val stepMm = if (mode == 0) {
+            (mpgResolution.toDoubleOrNull() ?: 0.01) *
+                    if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+        } else {
+            (axisSteps["X"]?.toDoubleOrNull() ?: 0.01) *
+                    if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+        }
+        val feedMmMin = if (mode == 0) 2500.0 else jogFeedRateMmMin.toDouble()
+        jogModeConfigurationAction?.invoke(mode, stepMm, feedMmMin)
+    }
+
+    LaunchedEffect(
+        jogModeConfigurationAction,
+        selectedMode,
+        mpgResolution,
+        jogFeedRateMmMin,
+        displayUnits,
+        machineStatus.connected,
+        machineStatus.pendantInControl
+    ) {
+        if (machineStatus.connected && machineStatus.pendantInControl == false) {
+            configureSelectedJogMode(selectedMode)
         }
     }
 
@@ -139,82 +182,16 @@ fun PendantApp() {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 12.dp, end = 12.dp, top = 42.dp, bottom = 42.dp)
         ) {
-            Text(
-                text = "CNC Pendant",
-                fontSize = 25.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            TextButton(
-                onClick = {
-                    stopActiveJog()
-                    settingsOpen = !settingsOpen
-                }
-            ) {
-                Text(if (settingsOpen) "Back" else "Settings")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (settingsOpen) {
-            SettingsScreen(
-                pulsesPerRev = pulsesPerRev,
-                onPulsesPerRevChanged = {
-                    pulsesPerRev = it
-                }
-            )
-        } else {
-            PendantConnectionPanel(
-                onMachineStatusChanged = { newStatus ->
-                    machineStatus = newStatus
-
-                    if (
-                        !displayUnitsInitialized &&
-                        newStatus.position.modalStateKnown
-                    ) {
-                        displayUnits = newStatus.position.units
-                        displayUnitsInitialized = true
-                    }
-                },
-
-                onZeroAxisActionAvailable = { action ->
-                    zeroAxisAction = action
-                },
-
-                onSetAxisActionAvailable = { action ->
-                    setAxisAction = action
-                },
-
-                onIncrementalJogActionAvailable = { action ->
-                    incrementalJogAction = action
-                },
-
-                onContinuousJogStartActionAvailable = { action ->
-                    continuousJogStartAction = action
-                },
-
-                onStopJogActionAvailable = { action ->
-                    stopJogAction = action
-                },
-
-                onCommandBusyChanged = { busy ->
-                    coordinateCommandBusy = busy
-                }
-            )
-
             PositionDisplay(
                 status = machineStatus,
                 displayMode = coordinateDisplayMode,
@@ -223,14 +200,15 @@ fun PendantApp() {
                 },
                 displayUnits = displayUnits,
                 onDisplayUnitsChanged = {
+                    if (it != displayUnits) {
+                        listOf("X", "Y", "Z").forEach { axis ->
+                            if (axis !in customStepAxes) axisSteps[axis] = if (it == MachineUnits.MILLIMETERS) "10" else "0.375"
+                        }
+                    }
                     displayUnits = it
                     displayUnitsInitialized = true
                 },
-                zeroXEnabled =
-                machineStatus.connected &&
-                        machineStatus.machineState == "Idle" &&
-                        machineStatus.pendantInControl == false &&
-                        !coordinateCommandBusy,
+                zeroXEnabled = !coordinateCommandBusy,
                 onZeroAxis = { axis ->
                     zeroAxisAction?.invoke(axis)
                 },
@@ -239,62 +217,90 @@ fun PendantApp() {
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(12.dp)
+                    )
             ) {
-                ModeTab(
-                    text = "MPG",
-                    selected = selectedMode == 0,
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    stopActiveJog()
-                    selectedMode = 0
+                    ModeTab("MPG", selectedMode == 0, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 0
+                        configureSelectedJogMode(0)
+                    }
+                    ModeTab("Continuous", selectedMode == 1, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 1
+                        configureSelectedJogMode(1)
+                    }
+                    ModeTab("Incremental", selectedMode == 2, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 2
+                        configureSelectedJogMode(2)
+                    }
+                    ModeTab("Position", selectedMode == 3, Modifier.weight(1f)) {
+                        stopActiveJog()
+                        selectedMode = 3
+                    }
                 }
 
-                ModeTab(
-                    text = "Continuous",
-                    selected = selectedMode == 1,
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .pointerInput(selectedMode) {
+                            var dragTotal = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragTotal = 0f },
+                                onHorizontalDrag = { change, amount ->
+                                    dragTotal += amount
+                                    change.consume()
+                                },
+                                onDragEnd = {
+                                    if (dragTotal < -70f) {
+                                        stopActiveJog()
+                                        selectedMode = (selectedMode + 1).coerceAtMost(3)
+                                        configureSelectedJogMode(selectedMode)
+                                    } else if (dragTotal > 70f) {
+                                        stopActiveJog()
+                                        selectedMode = (selectedMode - 1).coerceAtLeast(0)
+                                        configureSelectedJogMode(selectedMode)
+                                    }
+                                }
+                            )
+                        }
+                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
                 ) {
-                    stopActiveJog()
-                    selectedMode = 1
-                }
-
-                ModeTab(
-                    text = "Incremental",
-                    selected = selectedMode == 2,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    stopActiveJog()
-                    selectedMode = 2
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            when (selectedMode) {
+                    when (selectedMode) {
                 0 -> MPGScreen(
                     position = mpgPosition,
                     onPositionChanged = {
                         mpgPosition = it
                     },
-                    pulsesPerRev = pulsesPerRev,
                     resolution = mpgResolution,
                     onResolutionChanged = {
                         mpgResolution = it
+                        if (selectedMode == 0) configureSelectedJogMode(0)
                     },
                     axis = mpgAxis,
                     onAxisChanged = {
                         mpgAxis = it
                     },
                     displayUnits = displayUnits,
-                    feedRate = displayedFeedRate,
-                    onFeedRateChanged = {
-                        updateDisplayedFeedRate(it)
-                    },
                     onJogRequest = { axis, distance, feedRate, units ->
                         lastIncrementalCommand =
                             "MPG $axis detent: $distance at $feedRate ($units)"
@@ -305,6 +311,9 @@ fun PendantApp() {
                             feedRate,
                             units
                         )
+                    },
+                    onJogCancel = {
+                        stopJogAction?.invoke()
                     }
                 )
 
@@ -316,6 +325,7 @@ fun PendantApp() {
                     speed = displayedFeedRate,
                     onSpeedChanged = {
                         updateDisplayedFeedRate(it)
+                        if (selectedMode == 1) configureSelectedJogMode(1)
                     },
                     holdToRun = holdToRun,
                     onHoldToRunChanged = {
@@ -343,9 +353,19 @@ fun PendantApp() {
 
                 2 -> IncrementalJogScreen(
                     axisSteps = axisSteps,
-                    lastCommand = lastIncrementalCommand,
                     onStepChanged = { axis, value ->
                         axisSteps[axis] = value
+                        if (axis !in customStepAxes) customStepAxes.add(axis)
+                        if (selectedMode == 2) {
+                            val step = value.toDoubleOrNull()
+                            if (step != null && step > 0.0) {
+                                val stepMm = step *
+                                        if (displayUnits == MachineUnits.MILLIMETERS) 1.0 else 25.4
+                                jogModeConfigurationAction?.invoke(
+                                    2, stepMm, jogFeedRateMmMin.toDouble()
+                                )
+                            }
+                        }
                     },
                     onCommand = { command ->
                         lastIncrementalCommand = command
@@ -354,6 +374,7 @@ fun PendantApp() {
                     feedRate = displayedFeedRate,
                     onFeedRateChanged = {
                         updateDisplayedFeedRate(it)
+                        if (selectedMode == 2) configureSelectedJogMode(2)
                     },
                     onJogRequest = { axis, distance, feedRate, units ->
                         lastIncrementalCommand =
@@ -365,8 +386,166 @@ fun PendantApp() {
                             feedRate,
                             units
                         )
+                    },
+                    onJogCancel = {
+                        stopJogAction?.invoke()
                     }
                 )
+
+                3 -> MoveToPositionScreen(
+                    status = machineStatus,
+                    coordinateMode = coordinateDisplayMode,
+                    displayUnits = displayUnits,
+                    enabled = !coordinateCommandBusy,
+                    onMove = { axis, target ->
+                        moveAxisAction?.invoke(
+                            axis, target, coordinateDisplayMode, displayUnits
+                        )
+                    },
+                    onMoveToZero = { axis ->
+                        moveAxisAction?.invoke(
+                            axis, 0.0, coordinateDisplayMode, displayUnits
+                        )
+                    }
+                )
+                    }
+                }
+            }
+        }
+
+        if (wcsPanelExpanded || topPanelExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f))
+                    .clickable {
+                        wcsPanelExpanded = false
+                        topPanelExpanded = false
+                    }
+            )
+        }
+
+        PendantConnectionPanel(
+            modifier = Modifier.align(Alignment.TopCenter),
+            expanded = topPanelExpanded,
+            onExpandedChange = { topPanelExpanded = it },
+                onMachineStatusChanged = { newStatus ->
+                    machineStatus = newStatus
+
+                    if (!newStatus.connected) {
+                        wasConnected = false
+                        displayUnitsInitialized = false
+                    } else {
+                        if (!wasConnected) {
+                            wasConnected = true
+                            displayUnitsInitialized = false
+                        }
+                        // Adopt controller units once after connecting.
+                        // Thereafter the display-units selector is user-owned;
+                        // ordinary status reports must not undo a manual choice.
+                        if (
+                            !displayUnitsInitialized &&
+                            newStatus.position.modalStateKnown
+                        ) {
+                            val controllerUnits = newStatus.position.units
+                            if (controllerUnits != displayUnits) {
+                                listOf("X", "Y", "Z").forEach { axis ->
+                                    if (axis !in customStepAxes) {
+                                        axisSteps[axis] = if (controllerUnits == MachineUnits.MILLIMETERS) "10" else "0.375"
+                                    }
+                                }
+                            }
+                            displayUnits = controllerUnits
+                            displayUnitsInitialized = true
+                        }
+                    }
+                },
+
+                onZeroAxisActionAvailable = { action ->
+                    zeroAxisAction = action
+                },
+
+                onSetAxisActionAvailable = { action ->
+                    setAxisAction = action
+                },
+
+                onMoveAxisActionAvailable = { action ->
+                    moveAxisAction = action
+                },
+
+                onSelectWcsActionAvailable = { action ->
+                    selectWcsAction = action
+                },
+
+                onIncrementalJogActionAvailable = { action ->
+                    incrementalJogAction = action
+                },
+
+                onContinuousJogStartActionAvailable = { action ->
+                    continuousJogStartAction = action
+                },
+
+                onStopJogActionAvailable = { action ->
+                    stopJogAction = action
+                },
+
+                onJogModeConfigurationAvailable = { action ->
+                    jogModeConfigurationAction = action
+                },
+
+                onCommandBusyChanged = { busy ->
+                    coordinateCommandBusy = busy
+                }
+            )
+
+
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(if (wcsPanelExpanded) 116.dp else 34.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .pointerInput(wcsPanelExpanded) {
+                    detectVerticalDragGestures { _, dragAmount ->
+                        if (dragAmount < -5f) wcsPanelExpanded = true
+                        if (dragAmount > 5f) wcsPanelExpanded = false
+                    }
+                }
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            if (wcsPanelExpanded) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Active Work Coordinate System", style = MaterialTheme.typography.titleSmall)
+                        TextButton(onClick = { wcsPanelExpanded = false }) { Text("Hide") }
+                    }
+                    OptionButtons(
+                        options = listOf("G54", "G55", "G56", "G57", "G58", "G59"),
+                        selected = machineStatus.position.activeWcs,
+                        onSelected = { wcs -> selectWcsAction?.invoke(wcs) },
+                        modifier = Modifier.fillMaxWidth(),
+                        compact = true,
+                        enabled = !coordinateCommandBusy
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Swipe up · Work Coordinate System",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

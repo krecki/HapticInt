@@ -5,9 +5,10 @@ import android.os.Handler
 import android.os.Looper
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
+import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
+import com.kreckapps.hapticinterface.model.DistanceMode
 import java.math.BigDecimal
 import kotlin.math.abs
-import java.util.ArrayDeque
 
 class PendantCommandController(
     private val bluetooth: PendantBluetoothManager,
@@ -18,12 +19,17 @@ class PendantCommandController(
 
     private enum class Stage {
         IDLE,
+        WAITING_FOR_INITIAL_LISTENING,
+        WAITING_FOR_INITIAL_CONTROL,
+        WAITING_FOR_INITIAL_MODAL,
+        WAITING_FOR_GO_TO_ZERO_MODAL_REPORT,
+        WAITING_FOR_DISTANCE_MODE_RESTORE,
+        WAITING_FOR_DISTANCE_MODE_VERIFY,
         WAITING_FOR_CONTROL,
         WAITING_FOR_COMMAND,
         WAITING_FOR_MODAL_REPORT,
         WAITING_FOR_POSITION_REPORT,
         WAITING_FOR_HOMING_REPORT,
-        WAITING_FOR_JOG_IDLE,
         WAITING_FOR_RELEASE
     }
 
@@ -31,21 +37,11 @@ class PendantCommandController(
         SELECT_WCS,
         ZERO_AXIS,
         SET_AXIS,
-        HOME_MACHINE,
-        JOG
+        GO_TO_ZERO_AXIS,
+        GO_TO_POSITION,
+        HOME_MACHINE
     }
-    private data class JogRequest(
-        val axis: Char,
-        val distance: Double,
-        val negative: Boolean,
-        val feedRate: Double,
-        val units: MachineUnits
-    )
-
-    private val pendingJogRequests = ArrayDeque<JogRequest>()
-
     companion object {
-        const val MAX_PENDING_JOG_REQUESTS = 64
         private val VALID_WCS = listOf(
             "G54", "G55", "G56",
             "G57", "G58", "G59"
@@ -58,9 +54,9 @@ class PendantCommandController(
 
         private const val POSITION_TOLERANCE = 0.001
 
-        private const val CONTINUOUS_SEGMENT_MM = 0.5
+        private const val CONTINUOUS_JOG_DISTANCE_MM = 220.0
 
-        private const val MAX_FEED_MM_MIN = 2000.0
+        private const val MAX_FEED_MM_MIN = 2500.0
         private const val MM_PER_INCH = 25.4
     }
 
@@ -73,27 +69,25 @@ class PendantCommandController(
     private var requestedWcs: String? = null
     private var requestedAxis: Char? = null
     private var requestedValue: Double? = null
+    private var requestedFeedRateMmMin: Double? = null
+    private var originalDistanceMode: DistanceMode? = null
+    private var requestedCoordinateMode: CoordinateDisplayMode = CoordinateDisplayMode.WORK
 
     private var timeoutRunnable: Runnable? = null
     private var releaseMessage = ""
 
-    // Jog state
-    private var jogAxis: Char? = null
-    private var jogSign = 1.0
-    private var jogDistance = 0.0
-    private var jogFeedRate = 0.0
-    private var jogUnits = MachineUnits.MILLIMETERS
-
-    private var continuousJog = false
+    // True while the continuous direction key is held by the UI.
     private var continuousJogActive = false
-    private var jogStopRequested = false
-
-    // Prevents a single early Idle report from being treated as
-    // confirmation that a jog has finished.
-    private var idleConfirmationPending = false
 
     // Blocks new operations if the controller's MPG state is uncertain.
     private var controlStateUncertain = false
+
+    // Runtime keypad settings are volatile on the controller. Cache only for
+    // this connection and resend them after every reconnect.
+    private var runtimeStepSpeedMmMin: Float? = null
+    private var runtimeFastSpeedMmMin: Float? = null
+    private var runtimeStepDistanceMm: Float? = null
+    private var runtimeFastDistanceMm: Float? = null
 
     val isBusy: Boolean
         get() = stage != Stage.IDLE
@@ -105,14 +99,36 @@ class PendantCommandController(
     fun updateConnection(connected: Boolean) {
         currentStatus = currentStatus.copy(
             connected = connected,
+            // Do not trust the previous Bluetooth session's MPG state.
+            pendantInControl = if (connected) null else currentStatus.pendantInControl,
             machineState = if (connected) {
                 currentStatus.machineState
             } else {
                 "Disconnected"
+            },
+            // Do not reuse the previous connection's G20/G21 state. The
+            // fresh $G report must establish units for this connection.
+            position = if (connected) {
+                currentStatus.position.copy(
+                    modalStateKnown = false,
+                    distanceMode = null,
+                    wcoX = null,
+                    wcoY = null,
+                    wcoZ = null
+                )
+            } else {
+                currentStatus.position
             }
         )
 
         onStatusChanged(currentStatus)
+
+        if (connected) {
+            runtimeStepSpeedMmMin = null
+            runtimeFastSpeedMmMin = null
+            runtimeStepDistanceMm = null
+            runtimeFastDistanceMm = null
+        }
 
         if (!connected && stage != Stage.IDLE) {
             cancelTimeout()
@@ -125,6 +141,30 @@ class PendantCommandController(
                 "Connection lost during pendant operation. " +
                         "Controller mode is uncertain. Check the controller."
             )
+        }
+    }
+
+    /**
+     * Establish the controller's modal state on each Bluetooth connection.
+     * The keypad plugin consumes ordinary G-code while MPG is off, so briefly
+     * switch to the normal protocol stream to request $G, then return to
+     * keypad/listening mode before enabling jog controls.
+     */
+    fun initializeControllerState() {
+        if (!currentStatus.connected || stage != Stage.IDLE) return
+
+        controlStateUncertain = true
+        stage = Stage.WAITING_FOR_INITIAL_LISTENING
+        onBusyChanged(true)
+        onMessageChanged("Checking controller mode...")
+
+        if (!bluetooth.sendRealtime(0x87.toChar())) {
+            markControlUncertain("Could not request controller status.")
+            return
+        }
+
+        startTimeout(4000) {
+            markControlUncertain("Timed out checking controller mode.")
         }
     }
 
@@ -176,12 +216,6 @@ class PendantCommandController(
     // ------------------------------------------------
     // Zero work-coordinate axes
     // ------------------------------------------------
-
-    fun zeroWorkX() = zeroWorkAxis('X')
-
-    fun zeroWorkY() = zeroWorkAxis('Y')
-
-    fun zeroWorkZ() = zeroWorkAxis('Z')
 
     fun zeroWorkAxis(axis: Char) {
         val normalizedAxis = axis.uppercaseChar()
@@ -247,6 +281,47 @@ class PendantCommandController(
     }
 
     // ------------------------------------------------
+    // Absolute rapid moves in the currently displayed coordinate system
+    // ------------------------------------------------
+
+    fun moveAxisToPosition(
+        axis: Char,
+        target: Double,
+        coordinateMode: CoordinateDisplayMode,
+        displayUnits: MachineUnits
+    ) {
+        val normalizedAxis = axis.uppercaseChar()
+        if (normalizedAxis !in VALID_AXES) {
+            onMessageChanged("Invalid axis.")
+            return
+        }
+        if (!target.isFinite()) {
+            onMessageChanged("Please enter a valid target coordinate.")
+            return
+        }
+        if (!canStartOperation()) return
+        if (!currentStatus.position.modalStateKnown ||
+            currentStatus.position.distanceMode == null
+        ) {
+            onMessageChanged("Controller modal state is not known. Synchronize before moving.")
+            return
+        }
+        if (coordinateMode == CoordinateDisplayMode.WORK &&
+            currentStatus.position.activeWcs !in VALID_WCS
+        ) {
+            onMessageChanged("Active work coordinate system is invalid.")
+            return
+        }
+
+        operation = Operation.GO_TO_POSITION
+        requestedWcs = currentStatus.position.activeWcs
+        requestedAxis = normalizedAxis
+        requestedValue = toMillimeters(target, displayUnits)
+        requestedCoordinateMode = coordinateMode
+        beginControlHandover("Requesting pendant control for $normalizedAxis rapid move...")
+    }
+
+    // ------------------------------------------------
     // Home machine
     // ------------------------------------------------
 
@@ -264,14 +339,12 @@ class PendantCommandController(
     }
 
     // ------------------------------------------------
-    // Incremental jog
+    // Keypad jogging - fire-and-forget from Android
     // ------------------------------------------------
 
     /**
-     * Sends one incremental jog.
-     *
-     * distance and feedRate use the selected units:
-     * mm and mm/min, or inches and inches/min.
+     * Sends one keypad Step-mode jog immediately. No Android-side movement
+     * queue is maintained and completion status is not awaited.
      */
     fun jogIncrement(
         axis: Char,
@@ -280,112 +353,29 @@ class PendantCommandController(
         units: MachineUnits
     ) {
         val normalizedAxis = axis.uppercaseChar()
-
         if (normalizedAxis !in VALID_AXES) {
             onMessageChanged("Invalid jog axis.")
             return
         }
+        if (!distance.isFinite() || distance == 0.0 ||
+            !validateJogDistance(distance, units) ||
+            !validateFeedRate(feedRate, units)) return
+        if (!canSendKeypadJog()) return
 
-        if (!distance.isFinite() || distance == 0.0) {
-            onMessageChanged("Jog distance must be a nonzero number.")
-            return
-        }
-
-        if (!validateFeedRate(feedRate, units)) return
-
-        val request = JogRequest(
+        sendKeypadJog(
             axis = normalizedAxis,
-            distance = abs(distance),
             negative = distance < 0.0,
-            feedRate = feedRate,
-            units = units
-        )
-
-        // If an incremental jog is already underway, queue this request.
-        // This allows rapid MPG detents and repeated incremental button presses
-        // to be processed in order instead of being discarded.
-        if (stage != Stage.IDLE) {
-            val canQueue =
-                operation == Operation.JOG &&
-                        !continuousJog &&
-                        !jogStopRequested &&
-                        stage in listOf(
-                    Stage.WAITING_FOR_CONTROL,
-                    Stage.WAITING_FOR_COMMAND,
-                    Stage.WAITING_FOR_JOG_IDLE
-                )
-
-            if (!canQueue) {
-                onMessageChanged("Another pendant operation is in progress.")
-                return
-            }
-
-            if (pendingJogRequests.size >= MAX_PENDING_JOG_REQUESTS) {
-                onMessageChanged("Jog queue is full. Release the jog control and try again.")
-                return
-            }
-
-            pendingJogRequests.addLast(request)
-            onMessageChanged(
-                "Jog queued: ${if (distance < 0.0) "-" else "+"}$normalizedAxis. " +
-                        "${pendingJogRequests.size} movement(s) waiting."
-            )
-            return
-        }
-
-        if (!canStartOperation()) return
-
-        operation = Operation.JOG
-        continuousJog = false
-        continuousJogActive = false
-        jogStopRequested = false
-        idleConfirmationPending = false
-
-        pendingJogRequests.clear()
-
-        loadJogRequest(request)
-
-        beginControlHandover(
-            "Requesting pendant control for incremental jog..."
+            distanceMm = toMillimeters(abs(distance), units),
+            feedRateMmMin = toMillimeters(feedRate, units)
+                .coerceAtMost(MAX_FEED_MM_MIN),
+            mode = '2',
+            continuous = false
         )
     }
-
-    private fun loadJogRequest(request: JogRequest) {
-        jogAxis = request.axis
-        jogSign = if (request.negative) -1.0 else 1.0
-        jogDistance = request.distance
-        jogFeedRate = request.feedRate
-        jogUnits = request.units
-    }
-
-    private fun startNextQueuedIncrement() {
-        val next = pendingJogRequests.pollFirst()
-
-        if (next == null) {
-            releaseControl("Incremental jog completed.")
-            return
-        }
-
-        loadJogRequest(next)
-
-        onMessageChanged(
-            "Sending next queued ${next.axis} jog. " +
-                    "${pendingJogRequests.size} movement(s) remaining."
-        )
-
-        sendJogSegment()
-    }
-
-    // ------------------------------------------------
-    // Continuous jog
-    // ------------------------------------------------
 
     /**
-     * Starts repeated bounded jog segments.
-     *
-     * direction examples: "+X", "-X", "+Y", "-Y", "+Z", "-Z".
-     *
-     * Each segment is 0.5 mm, or its equivalent in inches.
+     * Continuous mode uses a long finite keypad jog. The physical key-up
+     * event sends the keypad plugin's realtime jog-cancel byte.
      */
     fun startContinuousJog(
         direction: String,
@@ -393,107 +383,152 @@ class PendantCommandController(
         units: MachineUnits
     ) {
         val normalized = direction.trim().uppercase()
-
-        if (
-            normalized.length != 2 ||
+        if (normalized.length != 2 ||
             (normalized[0] != '+' && normalized[0] != '-') ||
-            normalized[1] !in VALID_AXES
-        ) {
+            normalized[1] !in VALID_AXES) {
             onMessageChanged("Invalid jog direction.")
             return
         }
+        if (!validateFeedRate(feedRate, units) || !canSendKeypadJog()) return
 
-        if (!validateFeedRate(feedRate, units)) return
-        if (!canStartOperation()) return
-
-        // Direction is formatted as sign first, axis second.
-        jogAxis = normalized[1]
-        jogSign = if (normalized[0] == '+') 1.0 else -1.0
-
-        jogDistance = if (units == MachineUnits.MILLIMETERS) {
-            CONTINUOUS_SEGMENT_MM
-        } else {
-            CONTINUOUS_SEGMENT_MM / MM_PER_INCH
-        }
-
-        jogFeedRate = feedRate
-        jogUnits = units
-
-        operation = Operation.JOG
-        continuousJog = true
         continuousJogActive = true
-        jogStopRequested = false
-        idleConfirmationPending = false
 
-        beginControlHandover(
-            "Requesting pendant control for continuous jog..."
+        sendKeypadJog(
+            axis = normalized[1],
+            negative = normalized[0] == '-',
+            distanceMm = CONTINUOUS_JOG_DISTANCE_MM,
+            feedRateMmMin = toMillimeters(feedRate, units)
+                .coerceAtMost(MAX_FEED_MM_MIN),
+            mode = '0',
+            continuous = true
         )
     }
 
     /**
-     * Stops continuous jogging or cancels an incremental jog
-     * that is currently in progress.
+     * Preloads the volatile keypad settings when the user enters a jog mode.
+     * Values are supplied in mm and mm/min.
      */
-    fun stopJog() {
-        if (operation != Operation.JOG) return
+    fun configureJogMode(mode: Int, stepDistanceMm: Double, feedRateMmMin: Double) {
+        if (!canSendKeypadJog()) return
+        val speed = feedRateMmMin.toFloat()
+        if (!speed.isFinite() || speed !in 1f..10000f) return
 
-        continuousJogActive = false
-        jogStopRequested = true
-
-        when (stage) {
-            Stage.WAITING_FOR_CONTROL -> {
-                // If control is granted, the status handler will release
-                // it without starting a jog.
-                onMessageChanged("Jog cancelled before starting.")
+        when (mode) {
+            0, 2 -> {
+                val distance = stepDistanceMm.toFloat()
+                if (!distance.isFinite() || distance !in 0.001f..1000f) return
+                if (runtimeStepSpeedMmMin != speed && sendRuntimeSetting(1, speed))
+                    runtimeStepSpeedMmMin = speed
+                if (runtimeStepDistanceMm != distance && sendRuntimeSetting(4, distance))
+                    runtimeStepDistanceMm = distance
             }
-
-            Stage.WAITING_FOR_COMMAND,
-            Stage.WAITING_FOR_JOG_IDLE -> {
-                requestJogCancellation("Jog stopped.")
+            1 -> {
+                val distance = CONTINUOUS_JOG_DISTANCE_MM.toFloat()
+                if (runtimeFastSpeedMmMin != speed && sendRuntimeSetting(3, speed))
+                    runtimeFastSpeedMmMin = speed
+                if (runtimeFastDistanceMm != distance && sendRuntimeSetting(6, distance))
+                    runtimeFastDistanceMm = distance
             }
-
-            else -> Unit
         }
     }
 
     /**
-     * Sends the real-time jog-cancel byte and waits for an Idle report.
-     * It deliberately does not release MPG control until the jog has
-     * stopped or the controller state is declared uncertain.
+     * A keypad key-up is sent immediately. The controller's status reports
+     * are deliberately not part of the jog command pipeline.
      */
-    private fun requestJogCancellation(message: String) {
-        cancelTimeout()
-
+    fun stopJog() {
+        // Jog cancel is valid for Step, Fast, and queued MPG detent moves.
+        // Send it whenever connected, even if the latest status report is
+        // stale or temporarily missing the MPG field.
         continuousJogActive = false
-        jogStopRequested = true
-        idleConfirmationPending = false
-
-        if (currentStatus.pendantInControl != true) {
-            markControlUncertain(
-                "$message Pendant control is not confirmed. " +
-                        "Check the controller."
-            )
+        if (!currentStatus.connected) {
+            onMessageChanged("Cannot send jog cancel: pendant is disconnected.")
             return
         }
 
-        stage = Stage.WAITING_FOR_JOG_IDLE
-        onMessageChanged("Cancelling jog...")
+        if (bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
+            onMessageChanged("Jog cancel sent.")
+        } else {
+            onMessageChanged("Could not send jog cancel.")
+        }
+    }
 
-        if (!bluetooth.sendRealtime(JOG_CANCEL.toChar())) {
-            markControlUncertain(
-                "Could not send jog cancel. Check the controller."
-            )
+    private fun canSendKeypadJog(): Boolean {
+        if (!currentStatus.connected) {
+            onMessageChanged("Pendant is not connected.")
+            return false
+        }
+        if (controlStateUncertain || currentStatus.pendantInControl != false) {
+            onMessageChanged("Controller must be in keypad/listening mode (MPG off).")
+            return false
+        }
+        if (stage != Stage.IDLE || operation != null) {
+            onMessageChanged("Another pendant operation is in progress.")
+            return false
+        }
+        return true
+    }
+
+    private fun sendKeypadJog(
+        axis: Char,
+        negative: Boolean,
+        distanceMm: Double,
+        feedRateMmMin: Double,
+        mode: Char,
+        continuous: Boolean
+    ) {
+        val speedId = if (continuous) 3 else 1
+        val distanceId = if (continuous) 6 else 4
+        val speed = feedRateMmMin.toFloat()
+        val distance = distanceMm.toFloat()
+
+        if (!speed.isFinite() || !distance.isFinite()) return
+
+        // Send only changed runtime settings. The keypad firmware stores these
+        // in RAM; no $ settings command or NVS write is performed.
+        if (continuous) {
+            if (runtimeFastSpeedMmMin != speed) {
+                if (!sendRuntimeSetting(speedId, speed)) {
+                    onMessageChanged("Could not update keypad jog feed rate.")
+                    return
+                }
+                runtimeFastSpeedMmMin = speed
+            }
+            if (runtimeFastDistanceMm != distance) {
+                if (!sendRuntimeSetting(distanceId, distance)) {
+                    onMessageChanged("Could not update keypad jog distance.")
+                    return
+                }
+                runtimeFastDistanceMm = distance
+            }
+        } else {
+            if (runtimeStepSpeedMmMin != speed) {
+                if (!sendRuntimeSetting(speedId, speed)) {
+                    onMessageChanged("Could not update keypad jog feed rate.")
+                    return
+                }
+                runtimeStepSpeedMmMin = speed
+            }
+            if (runtimeStepDistanceMm != distance) {
+                if (!sendRuntimeSetting(distanceId, distance)) {
+                    onMessageChanged("Could not update keypad jog distance.")
+                    return
+                }
+                runtimeStepDistanceMm = distance
+            }
+        }
+
+        val direction = when (axis) {
+            'X' -> if (negative) 'L' else 'R'
+            'Y' -> if (negative) 'B' else 'F'
+            else -> if (negative) 'D' else 'U'
+        }
+
+        if (!bluetooth.sendRealtime(mode) || !bluetooth.sendRealtime(direction)) {
+            onMessageChanged("Failed to send keypad jog command.")
             return
         }
-
-        bluetooth.sendRealtime('?')
-
-        startTimeout(5000) {
-            markControlUncertain(
-                "Jog cancellation could not be confirmed. " +
-                        "Check the controller before continuing."
-            )
-        }
+        onMessageChanged(if (continuous) "Continuous $axis jog started." else "$axis step jog sent.")
     }
 
     // ------------------------------------------------
@@ -534,6 +569,21 @@ class PendantCommandController(
         return true
     }
 
+    private fun validateJogDistance(
+        distance: Double,
+        units: MachineUnits
+    ): Boolean {
+        val distanceMm = toMillimeters(abs(distance), units)
+        if (distanceMm < 0.001 || distanceMm > 1000.0) {
+            onMessageChanged(
+                "Jog distance must be between 0.001 and 1000 mm " +
+                        "(0.00004 and 39.37 inches)."
+            )
+            return false
+        }
+        return true
+    }
+
     private fun validateFeedRate(
         feedRate: Double,
         units: MachineUnits
@@ -543,13 +593,15 @@ class PendantCommandController(
             return false
         }
 
-        val maximum = if (units == MachineUnits.MILLIMETERS) {
-            MAX_FEED_MM_MIN
-        } else {
-            MAX_FEED_MM_MIN / MM_PER_INCH
-        }
-
-        if (feedRate > maximum) {
+        // Compare feed rate in the controller's internal mm/min units.
+        // The inch slider is capped at 98 in/min (2489.2 mm/min).
+        val feedRateMmMin = toMillimeters(feedRate, units)
+        if (feedRateMmMin > MAX_FEED_MM_MIN + 0.001) {
+            val maximum = if (units == MachineUnits.MILLIMETERS) {
+                MAX_FEED_MM_MIN
+            } else {
+                98.0
+            }
             onMessageChanged(
                 "Feed rate exceeds the pendant limit of " +
                         "${formatNumber(maximum)} ${unitName(units)}/min."
@@ -603,19 +655,38 @@ class PendantCommandController(
         }
 
         when (stage) {
+            Stage.WAITING_FOR_INITIAL_LISTENING -> {
+                if (currentStatus.pendantInControl == false) {
+                    cancelTimeout()
+                    stage = Stage.WAITING_FOR_INITIAL_CONTROL
+                    if (!bluetooth.sendRealtime(MPG_TOGGLE.toChar())) {
+                        markControlUncertain("Could not temporarily enable the protocol stream.")
+                        return
+                    }
+                    startTimeout(4000) {
+                        markControlUncertain("Controller did not confirm protocol-stream mode.")
+                    }
+                }
+            }
+
+            Stage.WAITING_FOR_INITIAL_CONTROL -> {
+                if (currentStatus.pendantInControl == true) {
+                    cancelTimeout()
+                    stage = Stage.WAITING_FOR_INITIAL_MODAL
+                    if (!bluetooth.sendCommand("\$G")) {
+                        releaseControl("Could not request controller modal state.")
+                        return
+                    }
+                    startTimeout(4000) {
+                        releaseControl("Timed out waiting for controller modal state.")
+                    }
+                }
+            }
+
             Stage.WAITING_FOR_CONTROL -> {
                 if (currentStatus.pendantInControl == true) {
                     cancelTimeout()
-
-                    if (operation == Operation.JOG) {
-                        if (jogStopRequested) {
-                            releaseControl("Jog cancelled.")
-                        } else {
-                            sendJogSegment()
-                        }
-                    } else {
-                        sendPendingCommand()
-                    }
+                    sendPendingCommand()
                 }
             }
 
@@ -646,10 +717,6 @@ class PendantCommandController(
                 }
             }
 
-            Stage.WAITING_FOR_JOG_IDLE -> {
-                handleJogStatus()
-            }
-
             Stage.WAITING_FOR_RELEASE -> {
                 if (currentStatus.pendantInControl == false) {
                     finish(releaseMessage)
@@ -657,60 +724,6 @@ class PendantCommandController(
             }
 
             else -> Unit
-        }
-    }
-
-    private fun handleJogStatus() {
-        if (currentStatus.pendantInControl != true) {
-            markControlUncertain(
-                "Pendant control was lost during jogging. " +
-                        "Check the controller."
-            )
-            return
-        }
-
-        when (currentStatus.machineState) {
-            "Alarm" -> {
-                releaseControl(
-                    "Jog ended in an alarm state. Check the controller."
-                )
-            }
-
-            "Idle" -> {
-                // Require a second Idle observation after a fresh status
-                // request. This helps avoid treating an early status report
-                // as proof that a newly accepted jog has already finished.
-                if (!idleConfirmationPending) {
-                    idleConfirmationPending = true
-
-                    handler.postDelayed({
-                        if (stage == Stage.WAITING_FOR_JOG_IDLE) {
-                            bluetooth.sendRealtime('?')
-                        }
-                    }, 100)
-
-                    return
-                }
-
-                idleConfirmationPending = false
-                cancelTimeout()
-
-                if (jogStopRequested || (continuousJog && !continuousJogActive)) {
-                    releaseControl("Jog stopped.")
-                } else if (continuousJog) {
-                    // Continuous jogging now streams segments on command acceptance.
-                    // Reaching this branch normally means the jog was cancelled.
-                    releaseControl("Jog stopped.")
-                } else {
-                    // Process the next MPG detent or queued incremental movement.
-                    startNextQueuedIncrement()
-                }
-            }
-
-            else -> {
-                // The machine is still moving or changing state.
-                idleConfirmationPending = false
-            }
         }
     }
 
@@ -725,6 +738,33 @@ class PendantCommandController(
         )
 
         onStatusChanged(currentStatus)
+
+        if (stage == Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT) {
+            val mode = currentStatus.position.distanceMode
+            if (mode == null) {
+                markControlUncertain("Controller did not report G90/G91. Move was not started.")
+            } else {
+                originalDistanceMode = mode
+                sendGoToZeroMove()
+            }
+            return
+        }
+
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_VERIFY) {
+            if (currentStatus.position.distanceMode == DistanceMode.INCREMENTAL) {
+                releaseControl("Rapid move completed; original G91 mode restored and verified.")
+            } else {
+                markControlUncertain("Controller did not confirm restoration of G91. Check controller mode.")
+            }
+            return
+        }
+
+        if (stage == Stage.WAITING_FOR_INITIAL_MODAL &&
+            currentStatus.position.modalStateKnown
+        ) {
+            releaseControl("Controller units synchronized.")
+            return
+        }
 
         if (
             stage == Stage.WAITING_FOR_MODAL_REPORT &&
@@ -741,6 +781,19 @@ class PendantCommandController(
     // ------------------------------------------------
 
     private fun sendPendingCommand() {
+        if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) {
+            stage = Stage.WAITING_FOR_GO_TO_ZERO_MODAL_REPORT
+            onMessageChanged("Checking G90/G91 before absolute rapid move...")
+            if (!bluetooth.sendCommand("\$G")) {
+                releaseControl("Could not read the current G90/G91 mode. Go to zero was not started.")
+                return
+            }
+            startTimeout(4000) {
+                releaseControl("Timed out reading G90/G91. Go to zero was not started.")
+            }
+            return
+        }
+
         stage = Stage.WAITING_FOR_COMMAND
 
         val command = when (operation) {
@@ -755,7 +808,8 @@ class PendantCommandController(
             }
 
             Operation.ZERO_AXIS,
-            Operation.SET_AXIS -> {
+            Operation.SET_AXIS,
+            Operation.GO_TO_ZERO_AXIS, Operation.GO_TO_POSITION -> {
                 val wcs = requestedWcs ?: return
 
                 val pNumber = when (wcs) {
@@ -821,65 +875,86 @@ class PendantCommandController(
         }
     }
 
-    // ------------------------------------------------
-    // Send one bounded jog segment
-    // ------------------------------------------------
-
-    private fun sendJogSegment() {
-        if (
-            jogStopRequested ||
-            (continuousJog && !continuousJogActive)
-        ) {
-            releaseControl("Jog cancelled.")
+    private fun sendGoToZeroMove() {
+        val axis = requestedAxis ?: run {
+            releaseControl("No axis was selected.")
             return
         }
-
-        if (currentStatus.pendantInControl != true) {
-            markControlUncertain(
-                "Cannot jog because pendant control is not confirmed."
-            )
+        val targetMm = requestedValue ?: run {
+            releaseControl("No target coordinate was supplied.")
             return
         }
-
-        val axis = jogAxis ?: run {
-            releaseControl("No jog axis was selected.")
-            return
-        }
-
-        val signedDistance = jogDistance * jogSign
-        val formattedDistance = formatNumber(signedDistance)
-        val formattedFeed = formatNumber(jogFeedRate)
-
-        val unitsCode = if (jogUnits == MachineUnits.MILLIMETERS) {
-            "G21"
+        val target = if (currentStatus.position.units == MachineUnits.INCHES) {
+            targetMm / MM_PER_INCH
+        } else targetMm
+        val coordinateCommand = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            "G53 G0 $axis${formatNumber(target)}"
         } else {
-            "G20"
+            "G0 $axis${formatNumber(target)}"
         }
-
-        val command =
-            "\$J=$unitsCode G91 $axis$formattedDistance F$formattedFeed"
-
         stage = Stage.WAITING_FOR_COMMAND
-        idleConfirmationPending = false
+        val coordinateLabel = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            "machine"
+        } else {
+            "work (${requestedWcs})"
+        }
+        onMessageChanged("Pendant has control. Rapid moving $axis to ${formatNumber(target)} in $coordinateLabel coordinates...")
+        if (!bluetooth.sendCommand("G90 $coordinateCommand")) {
+            restoreDistanceModeOrMarkUncertain("Failed to send absolute rapid move.")
+            return
+        }
+        startTimeout(600000) {
+            markControlUncertain("Timed out waiting for rapid move. Check position and G90/G91 before continuing.")
+        }
+    }
 
-        onMessageChanged(
-            if (continuousJog) {
-                "Jogging $axis. Sending bounded movement segment..."
-            } else {
-                "Sending incremental $axis jog..."
+    private fun restoreDistanceModeOrMarkUncertain(message: String) {
+        if (originalDistanceMode == DistanceMode.INCREMENTAL && currentStatus.pendantInControl == true) {
+            stage = Stage.WAITING_FOR_DISTANCE_MODE_RESTORE
+            onMessageChanged("$message Attempting to restore G91...")
+            if (!bluetooth.sendCommand("G91")) {
+                markControlUncertain("$message Could not restore G91. Check controller mode.")
+                return
             }
+            startTimeout(4000) {
+                markControlUncertain("$message Timed out restoring G91. Check controller mode.")
+            }
+        } else {
+            releaseControl(message)
+        }
+    }
+
+    private fun toMillimeters(value: Double, units: MachineUnits): Double =
+        if (units == MachineUnits.MILLIMETERS) value else value * MM_PER_INCH
+
+    private fun sendRuntimeSetting(settingId: Int, value: Float): Boolean {
+        if (!value.isFinite() || value <= 0f) return false
+
+        val bits = java.lang.Float.floatToIntBits(value)
+        val packet = byteArrayOf(
+            0xF0.toByte(),
+            0x01,
+            settingId.toByte(),
+            bits.toByte(),
+            (bits ushr 8).toByte(),
+            (bits ushr 16).toByte(),
+            (bits ushr 24).toByte(),
+            0
         )
 
-        if (!bluetooth.sendCommand(command)) {
-            requestJogCancellation("Failed to send jog command.")
-            return
+        var crc = 0
+        for (index in 1..6) {
+            crc = crc xor (packet[index].toInt() and 0xFF)
+            repeat(8) {
+                crc = if ((crc and 0x80) != 0) {
+                    ((crc shl 1) xor 0x07) and 0xFF
+                } else {
+                    (crc shl 1) and 0xFF
+                }
+            }
         }
-
-        startTimeout(5000) {
-            requestJogCancellation(
-                "Timed out waiting for jog command acceptance."
-            )
-        }
+        packet[7] = crc.toByte()
+        return bluetooth.sendBytes(packet)
     }
 
     // ------------------------------------------------
@@ -887,6 +962,18 @@ class PendantCommandController(
     // ------------------------------------------------
 
     private fun handleCommandAccepted() {
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
+            stage = Stage.WAITING_FOR_DISTANCE_MODE_VERIFY
+            onMessageChanged("G91 accepted. Verifying restored distance mode...")
+            if (!bluetooth.sendCommand("\$G")) {
+                markControlUncertain("G91 was accepted, but its restoration could not be verified. Check controller mode.")
+                return
+            }
+            startTimeout(4000) {
+                markControlUncertain("Timed out verifying restored G91. Check controller mode.")
+            }
+            return
+        }
         if (stage != Stage.WAITING_FOR_COMMAND) return
 
         when (operation) {
@@ -912,7 +999,9 @@ class PendantCommandController(
             }
 
             Operation.ZERO_AXIS,
-            Operation.SET_AXIS -> {
+            Operation.SET_AXIS,
+            Operation.GO_TO_ZERO_AXIS,
+            Operation.GO_TO_POSITION -> {
                 stage = Stage.WAITING_FOR_POSITION_REPORT
 
                 val axis = requestedAxis ?: '?'
@@ -928,10 +1017,14 @@ class PendantCommandController(
                     return
                 }
 
-                startTimeout(4000) {
-                    releaseControl(
-                        "Timed out verifying the $axis coordinate."
-                    )
+                startTimeout(if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) 600000 else 4000) {
+                    if (operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) {
+                        markControlUncertain("Timed out waiting for the rapid move to finish. Check position and G90/G91 before continuing.")
+                    } else {
+                        releaseControl(
+                            "Timed out verifying the $axis coordinate."
+                        )
+                    }
                 }
             }
 
@@ -957,39 +1050,6 @@ class PendantCommandController(
                 }
             }
 
-            Operation.JOG -> {
-                cancelTimeout()
-
-                if (continuousJog) {
-                    // Keep feeding the controller while the jog button is held.
-                    // Do not wait for the previous segment to reach Idle.
-                    if (continuousJogActive && !jogStopRequested) {
-                        sendJogSegment()
-                    } else {
-                        requestJogCancellation("Jog stopped.")
-                    }
-                } else {
-                    // Incremental jogs still wait for confirmed completion.
-                    stage = Stage.WAITING_FOR_JOG_IDLE
-                    idleConfirmationPending = false
-
-                    onMessageChanged("Jog accepted. Waiting for completion...")
-
-                    if (!bluetooth.sendRealtime('?')) {
-                        requestJogCancellation(
-                            "Could not verify jog completion."
-                        )
-                        return
-                    }
-
-                    startTimeout(5000) {
-                        requestJogCancellation(
-                            "Timed out waiting for jog completion."
-                        )
-                    }
-                }
-            }
-
             else -> Unit
         }
     }
@@ -1008,18 +1068,39 @@ class PendantCommandController(
         val axis = requestedAxis ?: return
         val expectedValue = requestedValue ?: return
 
-        val actualValue = when (axis) {
-            'X' -> currentStatus.position.workX
-            'Y' -> currentStatus.position.workY
-            'Z' -> currentStatus.position.workZ
-            else -> return
+        val actualValue = if (requestedCoordinateMode == CoordinateDisplayMode.MACHINE) {
+            when (axis) {
+                'X' -> currentStatus.position.machineX
+                'Y' -> currentStatus.position.machineY
+                'Z' -> currentStatus.position.machineZ
+                else -> return
+            }
+        } else {
+            when (axis) {
+                'X' -> currentStatus.position.workX
+                'Y' -> currentStatus.position.workY
+                'Z' -> currentStatus.position.workZ
+                else -> return
+            }
         }
 
+        // A G-code acknowledgement means the command was accepted, not that
+        // the axis has physically finished moving. Wait for Idle as well as
+        // the requested coordinate before restoring the modal distance mode.
+        if (currentStatus.machineState != "Idle") return
+
         if (abs(actualValue - expectedValue) <= POSITION_TOLERANCE) {
-            val message = if (operation == Operation.ZERO_AXIS) {
-                "$requestedWcs $axis successfully set to zero."
-            } else {
-                "$requestedWcs $axis successfully set to $expectedValue."
+            if ((operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) &&
+                originalDistanceMode == DistanceMode.INCREMENTAL
+            ) {
+                restoreDistanceModeOrMarkUncertain("$axis reached the requested coordinate.")
+                return
+            }
+            val message = when (operation) {
+                Operation.ZERO_AXIS -> "$requestedWcs $axis successfully set to zero."
+                Operation.GO_TO_ZERO_AXIS -> "$axis reached coordinate zero."
+                Operation.GO_TO_POSITION -> "$axis reached the requested position."
+                else -> "$requestedWcs $axis successfully set to $expectedValue."
             }
 
             releaseControl(message)
@@ -1070,14 +1151,18 @@ class PendantCommandController(
     private fun handleCommandError(error: String) {
         if (stage == Stage.IDLE) return
 
-        if (operation == Operation.JOG) {
-            requestJogCancellation(
-                "Controller rejected the jog command ($error)."
-            )
+        if (stage == Stage.WAITING_FOR_DISTANCE_MODE_RESTORE) {
+            markControlUncertain("Controller rejected G91 restoration ($error). Check controller mode.")
             return
         }
 
         if (currentStatus.pendantInControl == true) {
+            if ((operation == Operation.GO_TO_ZERO_AXIS || operation == Operation.GO_TO_POSITION) &&
+                originalDistanceMode == DistanceMode.INCREMENTAL
+            ) {
+                restoreDistanceModeOrMarkUncertain("Controller rejected the rapid move ($error).")
+                return
+            }
             releaseControl(
                 "Controller rejected the command ($error)."
             )
@@ -1147,16 +1232,11 @@ class PendantCommandController(
         requestedWcs = null
         requestedAxis = null
         requestedValue = null
+        requestedFeedRateMmMin = null
+        originalDistanceMode = null
+        requestedCoordinateMode = CoordinateDisplayMode.WORK
         operation = null
-
-        jogAxis = null
-        jogDistance = 0.0
-        jogFeedRate = 0.0
-        continuousJog = false
         continuousJogActive = false
-        jogStopRequested = false
-        idleConfirmationPending = false
-        pendingJogRequests.clear()
     }
 
     // ------------------------------------------------
@@ -1180,13 +1260,11 @@ class PendantCommandController(
     fun releaseResources() {
         cancelTimeout()
 
-        // Best-effort cleanup if the app is being destroyed while
-        // the controller is still in pendant mode.
-        if (currentStatus.pendantInControl == true) {
-            if (operation == Operation.JOG) {
-                bluetooth.sendRealtime(JOG_CANCEL.toChar())
-            }
+        // Best-effort cleanup if the app is destroyed during a jog or
+        // while a coordinate/homing operation has MPG control.
+        if (continuousJogActive) bluetooth.sendRealtime(JOG_CANCEL.toChar())
 
+        if (currentStatus.pendantInControl == true) {
             bluetooth.sendRealtime(MPG_TOGGLE.toChar())
         }
 

@@ -1,18 +1,31 @@
-
 package com.kreckapps.hapticinterface.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
@@ -30,37 +43,73 @@ fun PositionDisplay(
     onSetAxis: (Char, Double) -> Unit
 ) {
     val position = status.position
+    val isWorkDisplay = displayMode == CoordinateDisplayMode.WORK
 
     // Status coordinates arrive in millimeters because $13=0.
-    val coordinatesMm = if (displayMode == CoordinateDisplayMode.MACHINE) {
-        listOf(position.machineX, position.machineY, position.machineZ)
-    } else {
+    val coordinatesMm = if (isWorkDisplay) {
         listOf(position.workX, position.workY, position.workZ)
+    } else {
+        listOf(position.machineX, position.machineY, position.machineZ)
+    }
+    val coordinates = coordinatesMm.map { value ->
+        if (displayUnits == MachineUnits.INCHES) value / 25.4 else value
+    }
+    val unitLabel = if (displayUnits == MachineUnits.INCHES) "in" else "mm"
+
+    var editingAxis by remember { mutableStateOf<Char?>(null) }
+    var editText by remember { mutableStateOf(TextFieldValue("")) }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
+
+    fun finishEditing() {
+        val axis = editingAxis ?: return
+        val entered = editText.text.toDoubleOrNull()
+        if (entered != null && entered.isFinite()) {
+            // Convert display units to millimeters, then to the controller's
+            // current G20/G21 units because G10 L20 uses modal units.
+            val valueMm = if (displayUnits == MachineUnits.INCHES) {
+                entered * 25.4
+            } else {
+                entered
+            }
+            val controllerValue = if (position.units == MachineUnits.INCHES) {
+                valueMm / 25.4
+            } else {
+                valueMm
+            }
+            onSetAxis(axis, controllerValue)
+        }
+        editingAxis = null
+        keyboard?.hide()
+        focusManager.clearFocus()
     }
 
-    val coordinates = coordinatesMm.map { value ->
-        if (displayUnits == MachineUnits.INCHES) {
-            value / 25.4
-        } else {
-            value
+    BackHandler(enabled = editingAxis != null) {
+        finishEditing()
+    }
+
+    LaunchedEffect(editingAxis) {
+        if (editingAxis != null) {
+            focusRequester.requestFocus()
+            keyboard?.show()
+
+            // The Android keyboard's Back button can hide the IME without
+            // clearing field focus. Treat that dismissal as Set as well.
+            var keyboardWasVisible = false
+            snapshotFlow { imeInsets.getBottom(density) > 0 }
+                .distinctUntilChanged()
+                .collect { keyboardVisible ->
+                    if (keyboardVisible) {
+                        keyboardWasVisible = true
+                    } else if (keyboardWasVisible && editingAxis != null) {
+                        finishEditing()
+                    }
+                }
         }
     }
-
-    val unitLabel = if (displayUnits == MachineUnits.INCHES) {
-        "in"
-    } else {
-        "mm"
-    }
-
-    var xValue by remember { mutableStateOf("") }
-    var yValue by remember { mutableStateOf("") }
-    var zValue by remember { mutableStateOf("") }
-
-    val enteredValues = listOf(
-        'X' to xValue,
-        'Y' to yValue,
-        'Z' to zValue
-    )
 
     Column(
         modifier = Modifier
@@ -69,225 +118,66 @@ fun PositionDisplay(
                 MaterialTheme.colorScheme.surfaceVariant,
                 RoundedCornerShape(12.dp)
             )
-            .padding(12.dp)
+            .padding(10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "Machine Position",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = if (status.connected) {
-                    status.machineState
-                } else {
-                    "DEMO • NOT CONNECTED"
-                },
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (status.connected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "Coordinate Display",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        OptionButtons(
-            options = listOf("Machine", "Work"),
-            selected = if (
-                displayMode == CoordinateDisplayMode.MACHINE
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                "Machine"
-            } else {
-                "Work"
-            },
-            onSelected = {
-                onDisplayModeChanged(
-                    if (it == "Machine") {
-                        CoordinateDisplayMode.MACHINE
-                    } else {
-                        CoordinateDisplayMode.WORK
-                    }
+                Text(
+                    text = "Machine Position",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = position.activeWcs,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        )
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "Display Units",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        OptionButtons(
-            options = listOf("Inches", "Millimeters"),
-            selected = if (displayUnits == MachineUnits.INCHES) {
-                "Inches"
-            } else {
-                "Millimeters"
-            },
-            onSelected = {
-                onDisplayUnitsChanged(
-                    if (it == "Inches") {
-                        MachineUnits.INCHES
-                    } else {
-                        MachineUnits.MILLIMETERS
-                    }
-                )
+            val normalizedState = status.machineState.substringBefore(':').trim()
+            val machineStateLabel = when {
+                !status.connected -> "Disconnected"
+                normalizedState.equals("Idle", ignoreCase = true) -> "Idle"
+                normalizedState.equals("Jog", ignoreCase = true) -> "Jogging"
+                normalizedState.equals("Run", ignoreCase = true) -> "Running"
+                normalizedState.equals("Hold", ignoreCase = true) -> "Hold"
+                normalizedState.equals("Alarm", ignoreCase = true) -> "Alarm"
+                normalizedState.equals("Door", ignoreCase = true) -> "Door"
+                normalizedState.equals("Home", ignoreCase = true) -> "Homing"
+                normalizedState.equals("Check", ignoreCase = true) -> "Check"
+                normalizedState.equals("Sleep", ignoreCase = true) -> "Sleep"
+                normalizedState.equals("Tool", ignoreCase = true) -> "Tool change"
+                else -> if (normalizedState.isNotBlank()) normalizedState else "Waiting"
             }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            listOf("X", "Y", "Z").forEachIndexed { index, axis ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = axis,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = String.format(
-                            Locale.US,
-                            "%.3f",
-                            coordinates[index]
-                        ),
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = unitLabel,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            val statusColor = when (machineStateLabel) {
+                "Disconnected", "Waiting" -> MaterialTheme.colorScheme.onSurfaceVariant
+                "Alarm" -> MaterialTheme.colorScheme.error
+                "Jogging", "Running", "Homing" -> MaterialTheme.colorScheme.primary
+                "Hold", "Door" -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurface
             }
-        }
-
-        if (displayMode == CoordinateDisplayMode.WORK) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Set Work Coordinates",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            enteredValues.forEach { (axis, enteredText) ->
-                val parsedValue = enteredText.toDoubleOrNull()
-                val validValue = parsedValue != null &&
-                        parsedValue.isFinite()
-
-                Row(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = axis.toString(),
-                        modifier = Modifier.width(20.dp),
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    OutlinedTextField(
-                        value = enteredText,
-                        onValueChange = { newValue ->
-                            when (axis) {
-                                'X' -> xValue = newValue
-                                'Y' -> yValue = newValue
-                                'Z' -> zValue = newValue
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = {
-                            Text("New value")
-                        },
-                        suffix = {
-                            Text(unitLabel)
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal
-                        )
-                    )
-
-                    OutlinedButton(
-                        onClick = {
-                            val valueInDisplayUnits = parsedValue!!
-
-                            // Convert the entered value to millimeters.
-                            val valueInMm =
-                                if (displayUnits == MachineUnits.INCHES) {
-                                    valueInDisplayUnits * 25.4
-                                } else {
-                                    valueInDisplayUnits
-                                }
-
-                            // G10 L20 interprets its value using the
-                            // controller's current modal G20/G21 units.
-                            val valueInControllerUnits =
-                                if (position.units == MachineUnits.INCHES) {
-                                    valueInMm / 25.4
-                                } else {
-                                    valueInMm
-                                }
-
-                            onSetAxis(axis, valueInControllerUnits)
-                        },
-                        enabled = zeroXEnabled && validValue,
-                        contentPadding = PaddingValues(
-                            horizontal = 10.dp,
-                            vertical = 8.dp
-                        )
-                    ) {
-                        Text("Set")
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            onZeroAxis(axis)
-                        },
-                        enabled = zeroXEnabled,
-                        contentPadding = PaddingValues(
-                            horizontal = 10.dp,
-                            vertical = 8.dp
-                        )
-                    ) {
-                        Text("Zero")
-                    }
-                }
+                        .size(7.dp)
+                        .background(statusColor, RoundedCornerShape(50))
+                )
+                Text(
+                    text = machineStateLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor
+                )
             }
         }
 
@@ -295,24 +185,120 @@ fun PositionDisplay(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Coordinate system: ${position.activeWcs}",
-                fontSize = 12.sp
-            )
-
-            Text(
-                text = if (
-                    displayMode == CoordinateDisplayMode.MACHINE
-                ) {
-                    "MPos"
-                } else {
-                    "WPos"
+            OptionButtons(
+                options = listOf("MPos", "WPos"),
+                selected = if (isWorkDisplay) "WPos" else "MPos",
+                onSelected = {
+                    onDisplayModeChanged(
+                        if (it == "MPos") CoordinateDisplayMode.MACHINE
+                        else CoordinateDisplayMode.WORK
+                    )
                 },
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                modifier = Modifier.weight(1f),
+                compact = true
+            )
+            OptionButtons(
+                options = listOf("Inch", "mm"),
+                selected = if (displayUnits == MachineUnits.INCHES) "Inch" else "mm",
+                onSelected = {
+                    onDisplayUnitsChanged(
+                        if (it == "Inch") MachineUnits.INCHES
+                        else MachineUnits.MILLIMETERS
+                    )
+                },
+                modifier = Modifier.weight(1f),
+                compact = true
             )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            listOf('X', 'Y', 'Z').forEachIndexed { index, axis ->
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(vertical = 6.dp, horizontal = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = axis.toString(),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (editingAxis == axis) {
+                        OutlinedTextField(
+                            value = editText,
+                            onValueChange = { editText = it },
+                            modifier = Modifier
+                                .widthIn(min = 88.dp, max = 112.dp)
+                                .focusRequester(focusRequester),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            suffix = { Text(unitLabel) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onDone = { finishEditing() }
+                            )
+                        )
+                    } else {
+                        Text(
+                            text = String.format(Locale.US, "%.3f", coordinates[index]),
+                            modifier = Modifier
+                                .clickable(enabled = isWorkDisplay && zeroXEnabled) {
+                                    editingAxis = axis
+                                    val initialText = String.format(Locale.US, "%.3f", coordinates[index])
+                                    editText = TextFieldValue(initialText, selection = TextRange(0, initialText.length))
+                                }
+                                .padding(vertical = 4.dp),
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isWorkDisplay) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+
+                    if (isWorkDisplay) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = { onZeroAxis(axis) },
+                                enabled = zeroXEnabled,
+                                contentPadding = PaddingValues(
+                                    horizontal = 7.dp, vertical = 0.dp
+                                )
+                            ) {
+                                Text("Zero", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }

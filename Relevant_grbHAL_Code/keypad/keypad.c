@@ -34,7 +34,7 @@
 #include "grbl/nvs_buffer.h"
 #include "grbl/state_machine.h"
 
-#define KEYPAD_VERSION "1.47"
+#define KEYPAD_VERSION "1.49"
 
 typedef struct {
     char buf[KEYBUF_SIZE];
@@ -58,6 +58,126 @@ static bool connected = false;
 #if KEYPAD_ENABLE && MPG_ENABLE && defined(MPG_STREAM) && MPG_STREAM == KEYPAD_STREAM
 static on_mpg_registered_ptr on_mpg_registered;
 #endif
+
+/*
+ * Runtime jog-setting protocol (UART mode):
+ *   0xF0, command(0x01), setting_id, float32_le, crc8
+ * CRC-8/ATM (poly 0x07, init 0), over command through float.
+ * Setting IDs 1..6 map to $50..$55. Updates are RAM-only.
+ */
+#define RUNTIME_SETTING_MAGIC 0xF0
+#define RUNTIME_SETTING_COMMAND 0x01
+#define RUNTIME_SETTING_PACKET_DATA 7
+
+#define RUNTIME_SETTING_QUEUE_SIZE 8
+
+static uint8_t runtime_setting_packet[RUNTIME_SETTING_PACKET_DATA];
+static uint8_t runtime_setting_queue[RUNTIME_SETTING_QUEUE_SIZE][6];
+static volatile uint_fast8_t runtime_setting_head = 0;
+static volatile uint_fast8_t runtime_setting_tail = 0;
+static uint_fast8_t runtime_setting_packet_index = 0;
+
+static ISR_CODE uint8_t runtime_setting_crc8 (const uint8_t *data, uint_fast8_t length)
+{
+    uint8_t crc = 0;
+
+    for(uint_fast8_t i = 0; i < length; i++) {
+        crc ^= data[i];
+        for(uint_fast8_t bit = 0; bit < 8; bit++)
+            crc = (crc & 0x80) ? (uint8_t)((crc << 1) ^ 0x07) : (uint8_t)(crc << 1);
+    }
+
+    return crc;
+}
+
+static bool runtime_setting_valid (uint8_t id, float value)
+{
+    if(id >= 1 && id <= 3) // jog speeds, mm/min
+        return value >= 1.0f && value <= 10000.0f;
+
+    if(id >= 4 && id <= 6) // jog distances, mm
+        return value >= 0.001f && value <= 1000.0f;
+
+    return false;
+}
+
+FLASHMEM static void keypad_apply_runtime_setting (void *data)
+{
+    uint8_t packet[6];
+    float value;
+    uint_fast8_t tail = runtime_setting_tail;
+
+    if(tail == runtime_setting_head)
+        return;
+
+    memcpy(packet, runtime_setting_queue[tail], sizeof(packet));
+    runtime_setting_tail = (tail + 1) & (RUNTIME_SETTING_QUEUE_SIZE - 1);
+    memcpy(&value, &packet[2], sizeof(float));
+
+    // Step jogs are finite. Clear the plugin's held-key flag once grblHAL
+    // has left STATE_JOG, otherwise later runtime updates would be blocked.
+    if(jogging && !(state_get() & STATE_JOG))
+        jogging = false;
+
+    if(packet[0] == RUNTIME_SETTING_COMMAND && runtime_setting_valid(packet[1], value)) {
+        switch(packet[1]) {
+            case 1: jog.step_speed = value; break;
+            case 2: jog.slow_speed = value; break;
+            case 3: jog.fast_speed = value; break;
+            case 4: jog.step_distance = value; break;
+            case 5: jog.slow_distance = value; break;
+            case 6: jog.fast_distance = value; break;
+            default: break;
+        }
+
+        memcpy(&jogdata.settings, &jog, sizeof(jog_settings_t));
+
+        if(keypad.on_jogdata_changed)
+            keypad.on_jogdata_changed(&jogdata);
+    }
+
+    if(runtime_setting_tail != runtime_setting_head)
+        task_add_immediate(keypad_apply_runtime_setting, NULL);
+}
+
+// Called from the UART realtime input handler. Returns true for bytes
+// belonging to a runtime-setting frame so they are not treated as keypresses.
+static ISR_CODE bool runtime_setting_receive (uint8_t c)
+{
+    if(runtime_setting_packet_index == 0) {
+        if(c == RUNTIME_SETTING_MAGIC) {
+            runtime_setting_packet_index = 1;
+            return true;
+        }
+        return false;
+    }
+
+    // Once a frame starts, every following byte is payload until the
+    // fixed-length frame is complete. 0xF0 is valid inside IEEE-754 data.
+
+    runtime_setting_packet[runtime_setting_packet_index - 1] = c;
+
+    if(++runtime_setting_packet_index > RUNTIME_SETTING_PACKET_DATA) {
+        runtime_setting_packet_index = 0;
+
+        if(runtime_setting_packet[0] == RUNTIME_SETTING_COMMAND &&
+            runtime_setting_crc8(runtime_setting_packet, 6) == runtime_setting_packet[6]) {
+
+            uint_fast8_t head = runtime_setting_head;
+            uint_fast8_t next = (head + 1) & (RUNTIME_SETTING_QUEUE_SIZE - 1);
+
+            if(next != runtime_setting_tail) {
+                for(uint_fast8_t i = 0; i < 6; i++)
+                    runtime_setting_queue[head][i] = runtime_setting_packet[i];
+
+                runtime_setting_head = next;
+                task_add_immediate(keypad_apply_runtime_setting, NULL);
+            }
+        }
+    }
+
+    return true;
+}
 
 keypad_t keypad = {0};
 
@@ -165,6 +285,11 @@ FLASHMEM static void keypad_process_keypress (void *data)
     bool addedGcode, jogCommand = false;
     char command[35] = "", keycode = keypad_get_keycode();
     sys_state_t state = state_get();
+
+    // A setting frame may have arrived immediately before this keypress.
+    // Drain those updates first so the jog uses the newly selected values.
+    while(runtime_setting_tail != runtime_setting_head)
+        keypad_apply_runtime_setting(NULL);
 
     if((state & (STATE_ESTOP|STATE_ALARM)) &&
         !(keycode == CMD_STATUS_REPORT ||
@@ -487,6 +612,16 @@ static ISR_CODE bool ISR_FUNC(keypad_enqueue_keycode)(uint8_t c)
 {
     uint32_t bptr = (keybuf.head + 1) & (KEYBUF_SIZE - 1);    // Get next head pointer
 
+    if(runtime_setting_receive(c))
+        return true;
+        
+    // Pass full status report requests directly to grblHAL.
+    // Do not let the keypad plugin consume them as keypresses.
+    if(c == CMD_STATUS_REPORT_ALL) {
+        grbl.enqueue_realtime_command(c);
+        return true;
+    }
+
 #if MPG_ENABLE && defined(MPG_STREAM) && MPG_STREAM != KEYPAD_STREAM
     if(c == CMD_MPG_MODE_TOGGLE)
         return true;
@@ -494,10 +629,11 @@ static ISR_CODE bool ISR_FUNC(keypad_enqueue_keycode)(uint8_t c)
 
     if(c == CMD_JOG_CANCEL || (c == ASCII_CAN && !(state_get() & (STATE_ESTOP|STATE_ALARM)))) {
         keyreleased = true;
-        if(jogging) {
-            jogging = false;
-            grbl.enqueue_realtime_command(CMD_JOG_CANCEL);
-        }
+        // Always pass cancel to grblHAL. The plugin's jogging flag can lag
+        // queued keypress processing or planner state, so it is not a safe
+        // condition for deciding whether a cancel is needed.
+        jogging = false;
+        grbl.enqueue_realtime_command(CMD_JOG_CANCEL);
         keybuf.tail = keybuf.head;      // Flush keycode buffer.
     } else if(bptr != keybuf.tail) {    // If not buffer full
         keybuf.buf[keybuf.head] = c;    // add data to buffer

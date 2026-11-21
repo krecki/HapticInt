@@ -263,6 +263,23 @@ class PendantBluetoothManager(context: Context) {
     }
 
     /**
+     * Sends an exact sequence of raw bytes without adding a newline.
+     * Used for the keypad plugin's binary runtime-setting packets.
+     */
+    fun sendBytes(bytes: ByteArray): Boolean {
+        return try {
+            synchronized(writeLock) {
+                val output = socket?.outputStream ?: return false
+                output.write(bytes)
+                output.flush()
+            }
+            true
+        } catch (_: IOException) {
+            false
+        }
+    }
+
+    /**
      * Closes the Bluetooth connection.
      */
     fun disconnect() {

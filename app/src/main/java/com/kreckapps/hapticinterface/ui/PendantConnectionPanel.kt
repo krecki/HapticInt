@@ -6,9 +6,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,26 +20,35 @@ import androidx.compose.ui.unit.dp
 import com.kreckapps.hapticinterface.communication.PendantBluetoothManager
 import com.kreckapps.hapticinterface.communication.PendantCommandController
 import com.kreckapps.hapticinterface.model.MachineStatus
+import com.kreckapps.hapticinterface.model.CoordinateDisplayMode
 import com.kreckapps.hapticinterface.model.MachineUnits
 import kotlinx.coroutines.delay
 
 @Composable
 fun PendantConnectionPanel(
+    modifier: Modifier = Modifier,
     onMachineStatusChanged: (MachineStatus) -> Unit,
     onZeroAxisActionAvailable: (((Char) -> Unit)?) -> Unit,
     onSetAxisActionAvailable: (((Char, Double) -> Unit)?) -> Unit,
+    onMoveAxisActionAvailable: (((Char, Double, CoordinateDisplayMode, MachineUnits) -> Unit)?) -> Unit,
+    onSelectWcsActionAvailable: (((String) -> Unit)?) -> Unit,
     onIncrementalJogActionAvailable:
         (((Char, Double, Double, MachineUnits) -> Unit)?) -> Unit,
     onContinuousJogStartActionAvailable:
         (((String, Double, MachineUnits) -> Unit)?) -> Unit,
     onStopJogActionAvailable: ((() -> Unit)?) -> Unit,
-    onCommandBusyChanged: (Boolean) -> Unit
+    onJogModeConfigurationAvailable: (((Int, Double, Double) -> Unit)?) -> Unit,
+    onCommandBusyChanged: (Boolean) -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
 
     val latestStatusCallback = rememberUpdatedState(onMachineStatusChanged)
     val latestZeroAxisCallback = rememberUpdatedState(onZeroAxisActionAvailable)
     val latestSetAxisCallback = rememberUpdatedState(onSetAxisActionAvailable)
+    val latestMoveAxisCallback = rememberUpdatedState(onMoveAxisActionAvailable)
+    val latestSelectWcsCallback = rememberUpdatedState(onSelectWcsActionAvailable)
     val latestIncrementalJogCallback =
         rememberUpdatedState(onIncrementalJogActionAvailable)
     val latestContinuousJogCallback =
@@ -60,22 +71,15 @@ fun PendantConnectionPanel(
         mutableStateOf("Not connected")
     }
 
-    var currentStatus by remember {
-        mutableStateOf(MachineStatus())
-    }
-
     var commandBusy by remember {
         mutableStateOf(false)
     }
-    
-    val latestCommandBusy = rememberUpdatedState(commandBusy)
 
     val commandController = remember(bluetoothManager) {
         PendantCommandController(
             bluetooth = bluetoothManager,
 
             onStatusChanged = { newStatus ->
-                currentStatus = newStatus
                 latestStatusCallback.value(newStatus)
             },
 
@@ -102,6 +106,16 @@ fun PendantConnectionPanel(
         }
     }
 
+    val moveAxisAction = remember(commandController) {
+        { axis: Char, target: Double, mode: CoordinateDisplayMode, units: MachineUnits ->
+            commandController.moveAxisToPosition(axis, target, mode, units)
+        }
+    }
+
+    val selectWcsAction = remember(commandController) {
+        { wcs: String -> commandController.selectWorkCoordinateSystem(wcs) }
+    }
+
     // Publish the incremental jog action.
     val incrementalJogAction = remember(commandController) {
         { axis: Char, distance: Double, feedRate: Double, units: MachineUnits ->
@@ -125,6 +139,12 @@ fun PendantConnectionPanel(
         }
     }
 
+    val jogModeConfigurationAction = remember(commandController) {
+        { mode: Int, stepMm: Double, feedMmMin: Double ->
+            commandController.configureJogMode(mode, stepMm, feedMmMin)
+        }
+    }
+
     // Publish the jog stop action.
     val stopJogAction = remember(commandController) {
         {
@@ -135,9 +155,12 @@ fun PendantConnectionPanel(
     SideEffect {
         latestZeroAxisCallback.value(zeroAxisAction)
         latestSetAxisCallback.value(setAxisAction)
+        latestMoveAxisCallback.value(moveAxisAction)
+        latestSelectWcsCallback.value(selectWcsAction)
         latestIncrementalJogCallback.value(incrementalJogAction)
         latestContinuousJogCallback.value(continuousJogStartAction)
         latestStopJogCallback.value(stopJogAction)
+        onJogModeConfigurationAvailable(jogModeConfigurationAction)
         latestBusyCallback.value(commandBusy)
     }
 
@@ -166,17 +189,17 @@ fun PendantConnectionPanel(
 
                     when (state) {
                         PendantBluetoothManager.ConnectionState.CONNECTED -> {
+                            onExpandedChange(false)
                             commandController.updateConnection(true)
 
-                            // Request a complete grblHAL status report.
-                            bluetoothManager.sendRealtime(0x87.toChar())
-
-                            // Request the active G-code modal state.
-                            bluetoothManager.sendCommand("\$G")
+                            // Synchronize units/modal state through the
+                            // normal protocol stream, then return to keypad mode.
+                            commandController.initializeControllerState()
                         }
 
                         PendantBluetoothManager.ConnectionState.DISCONNECTED,
                         PendantBluetoothManager.ConnectionState.ERROR -> {
+                            onExpandedChange(false)
                             commandController.updateConnection(false)
                         }
 
@@ -194,9 +217,12 @@ fun PendantConnectionPanel(
         onDispose {
             latestZeroAxisCallback.value(null)
             latestSetAxisCallback.value(null)
+            latestMoveAxisCallback.value(null)
+            latestSelectWcsCallback.value(null)
             latestIncrementalJogCallback.value(null)
             latestContinuousJogCallback.value(null)
             latestStopJogCallback.value(null)
+            onJogModeConfigurationAvailable(null)
             latestBusyCallback.value(false)
 
             commandController.releaseResources()
@@ -205,23 +231,16 @@ fun PendantConnectionPanel(
         }
     }
 
-    // Request position every 100 ms and modal state every 1 second.
+    // Position polling is independent of modal-state synchronization.
+    // $G is requested only during the controlled connection/WCS handshakes,
+    // when the normal protocol stream is active.
     LaunchedEffect(connectionState) {
         if (
             connectionState ==
             PendantBluetoothManager.ConnectionState.CONNECTED
         ) {
-            var pollCount = 0
-
             while (true) {
                 bluetoothManager.sendRealtime('?')
-
-                if (pollCount % 10 == 0 && !latestCommandBusy.value) {
-                    bluetoothManager.sendCommand("\$G")
-                }
-
-                pollCount++
-
                 delay(100)
             }
         }
@@ -259,144 +278,105 @@ fun PendantConnectionPanel(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(bottom = if (expanded) 8.dp else 0.dp)
+            .pointerInput(expanded) {
+                detectVerticalDragGestures { _, dragAmount ->
+                    if (dragAmount > 8f) onExpandedChange(true)
+                    if (dragAmount < -8f) onExpandedChange(false)
+                }
+            }
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        if (expanded) {
+            PanelSectionTitle(
+                text = "Connection",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (connectionState) {
+                    PendantBluetoothManager.ConnectionState.CONNECTING -> {
+                        PanelActionChip(
+                            text = "Connecting…",
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionNeutralContainer,
+                            labelColor = PendantColors.onActionNeutralContainer,
+                            minHeight = 48.dp
+                        )
+                    }
+                    PendantBluetoothManager.ConnectionState.CONNECTED -> {
+                        PanelActionChip(
+                            text = "Disconnect",
+                            onClick = { connectOrDisconnect() },
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionDangerContainer,
+                            labelColor = PendantColors.onActionDangerContainer,
+                            minHeight = 48.dp
+                        )
+                    }
+                    else -> {
+                        PanelActionChip(
+                            text = "Connect",
+                            onClick = { connectOrDisconnect() },
+                            modifier = Modifier.weight(1f),
+                            containerColor = PendantColors.actionPrimaryContainer,
+                            labelColor = PendantColors.onActionPrimaryContainer,
+                            minHeight = 48.dp
+                        )
+                    }
+                }
+                PanelActionChip(
+                    text = "Home Machine",
+                    onClick = { commandController.homeMachine() },
+                    modifier = Modifier.weight(1f),
+                    containerColor = PendantColors.actionSecondaryContainer,
+                    labelColor = PendantColors.onActionSecondaryContainer,
+                    minHeight = 48.dp
+                )
+            }
+
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "Pendant Connection",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                Text(
-                    text = connectionMessage,
+                    text = "Connection: $connectionMessage",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Text(
-                    text = when {
-                        !currentStatus.connected ->
-                            "Pendant mode: Not connected"
-
-                        currentStatus.pendantInControl == true ->
-                            "Pendant mode: In control"
-
-                        currentStatus.pendantInControl == false ->
-                            "Pendant mode: Listening"
-
-                        else ->
-                            "Pendant mode: Waiting for controller..."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        currentStatus.pendantInControl == true ->
-                            MaterialTheme.colorScheme.tertiary
-
-                        currentStatus.pendantInControl == false ->
-                            MaterialTheme.colorScheme.primary
-
-                        else ->
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-
-            when (connectionState) {
-                PendantBluetoothManager.ConnectionState.CONNECTING -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                if (commandBusy) {
+                    Text(
+                        "Pendant operation in progress…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                PendantBluetoothManager.ConnectionState.CONNECTED -> {
-                    OutlinedButton(
-                        onClick = {
-                            connectOrDisconnect()
-                        }
-                    ) {
-                        Text("Disconnect")
-                    }
-                }
-
-                else -> {
-                    Button(
-                        onClick = {
-                            connectOrDisconnect()
-                        }
-                    ) {
-                        Text("Connect")
-                    }
-                }
             }
-        }
-
-        // Work Coordinate System Selector
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "Active Work Coordinate System",
-            style = MaterialTheme.typography.titleSmall
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf("G54", "G55", "G56", "G57", "G58", "G59").forEach { wcs ->
-                FilterChip(
-                    selected = currentStatus.position.activeWcs == wcs,
-                    enabled =
-                    currentStatus.connected &&
-                            currentStatus.machineState == "Idle" &&
-                            currentStatus.pendantInControl == false &&
-                            !commandBusy,
-                    onClick = {
-                        commandController.selectWorkCoordinateSystem(wcs)
-                    },
-                    label = {
-                        Text(wcs)
-                    }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .clickable { onExpandedChange(true) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Swipe down · Connection controls",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                commandController.homeMachine()
-            },
-            enabled =
-            currentStatus.connected &&
-                    currentStatus.machineState == "Idle" &&
-                    currentStatus.pendantInControl == false &&
-                    !commandBusy,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Home Machine")
-        }
-
-        if (commandBusy) {
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Pendant operation in progress...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }

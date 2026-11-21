@@ -1,8 +1,8 @@
 package com.kreckapps.hapticinterface.communication
 
-import com.kreckapps.hapticinterface.model.MachinePosition
 import com.kreckapps.hapticinterface.model.MachineStatus
 import com.kreckapps.hapticinterface.model.MachineUnits
+import com.kreckapps.hapticinterface.model.DistanceMode
 
 object GrblStatusParser {
 
@@ -17,94 +17,94 @@ object GrblStatusParser {
     ): MachineStatus? {
 
         val trimmed = report.trim()
+        if (!trimmed.startsWith("<") || !trimmed.endsWith(">")) return null
 
-        if (!trimmed.startsWith("<") || !trimmed.endsWith(">")) {
-            return null
-        }
-
-        val contents = trimmed
-            .removePrefix("<")
-            .removeSuffix(">")
-
+        val contents = trimmed.removePrefix("<").removeSuffix(">")
         val fields = contents.split("|")
-
         if (fields.isEmpty()) return null
 
         val machineState = fields[0].trim()
-
         if (machineState.isBlank()) return null
 
         val values = mutableMapOf<String, String>()
-
         for (field in fields.drop(1)) {
             val separator = field.indexOf(':')
-
             if (separator > 0) {
                 val key = field.substring(0, separator).trim()
                 val value = field.substring(separator + 1).trim()
-
                 values[key] = value
             }
         }
 
-        val oldPosition = previous.position
-
+        val old = previous.position
         val machinePosition = parseCoordinates(values["MPos"])
         val workPosition = parseCoordinates(values["WPos"])
-        val workCoordinateOffset = parseCoordinates(values["WCO"])
+        val reportedOffset = parseCoordinates(values["WCO"])
 
-        var machineX = oldPosition.machineX
-        var machineY = oldPosition.machineY
-        var machineZ = oldPosition.machineZ
+        val reportedWcs = values["WCS"]?.takeIf { it in validWcs }
+        val activeWcs = reportedWcs ?: old.activeWcs
+        val wcsChanged = activeWcs != old.activeWcs
 
-        var workX = oldPosition.workX
-        var workY = oldPosition.workY
-        var workZ = oldPosition.workZ
+        // Never apply an offset from a different work coordinate system.
+        var offsetX = if (wcsChanged) null else old.wcoX
+        var offsetY = if (wcsChanged) null else old.wcoY
+        var offsetZ = if (wcsChanged) null else old.wcoZ
+
+        if (reportedOffset != null) {
+            offsetX = reportedOffset[0]
+            offsetY = reportedOffset[1]
+            offsetZ = reportedOffset[2]
+        } else if (machinePosition != null && workPosition != null) {
+            // MPos and WPos together also provide a valid offset.
+            offsetX = machinePosition[0] - workPosition[0]
+            offsetY = machinePosition[1] - workPosition[1]
+            offsetZ = machinePosition[2] - workPosition[2]
+        }
+
+        var machineX = old.machineX
+        var machineY = old.machineY
+        var machineZ = old.machineZ
+        var workX = old.workX
+        var workY = old.workY
+        var workZ = old.workZ
 
         if (machinePosition != null) {
             machineX = machinePosition[0]
             machineY = machinePosition[1]
             machineZ = machinePosition[2]
+
+            // Recalculate WPos on every MPos update using the last known WCO.
+            if (offsetX != null && offsetY != null && offsetZ != null) {
+                workX = machineX - offsetX
+                workY = machineY - offsetY
+                workZ = machineZ - offsetZ
+            }
         }
 
         if (workPosition != null) {
             workX = workPosition[0]
             workY = workPosition[1]
             workZ = workPosition[2]
-        }
 
-        if (workCoordinateOffset != null) {
-
-            if (machinePosition != null && workPosition == null) {
-                workX = machineX - workCoordinateOffset[0]
-                workY = machineY - workCoordinateOffset[1]
-                workZ = machineZ - workCoordinateOffset[2]
-            }
-
-            if (workPosition != null && machinePosition == null) {
-                machineX = workX + workCoordinateOffset[0]
-                machineY = workY + workCoordinateOffset[1]
-                machineZ = workZ + workCoordinateOffset[2]
+            if (machinePosition == null &&
+                offsetX != null && offsetY != null && offsetZ != null
+            ) {
+                machineX = workX + offsetX
+                machineY = workY + offsetY
+                machineZ = workZ + offsetZ
             }
         }
 
-        val reportedWcs = values["WCS"]
-
-        val activeWcs = if (reportedWcs in validWcs) {
-            reportedWcs!!
-        } else {
-            oldPosition.activeWcs
-        }
-
-        val newPosition = oldPosition.copy(
+        val newPosition = old.copy(
             machineX = machineX,
             machineY = machineY,
             machineZ = machineZ,
-
             workX = workX,
             workY = workY,
             workZ = workZ,
-
+            wcoX = offsetX,
+            wcoY = offsetY,
+            wcoZ = offsetZ,
             activeWcs = activeWcs
         )
 
@@ -125,78 +125,59 @@ object GrblStatusParser {
         report: String,
         previous: MachineStatus
     ): MachineStatus {
-
         val trimmed = report.trim()
-
         if (!trimmed.startsWith("[GC:") || !trimmed.endsWith("]")) {
             return previous
         }
 
-        val contents = trimmed
-            .removePrefix("[GC:")
-            .removeSuffix("]")
-
-        val words = contents
-            .trim()
+        val contents = trimmed.removePrefix("[GC:").removeSuffix("]")
+        val words = contents.trim()
             .split(Regex("\\s+"))
             .filter { it.isNotBlank() }
 
         var activeWcs = previous.position.activeWcs
         var units = previous.position.units
         var unitsReported = false
+        var distanceMode = previous.position.distanceMode
 
         for (word in words) {
             when (word) {
-                in validWcs -> {
-                    activeWcs = word
-                }
-
+                in validWcs -> activeWcs = word
                 "G20" -> {
                     units = MachineUnits.INCHES
                     unitsReported = true
                 }
-
                 "G21" -> {
                     units = MachineUnits.MILLIMETERS
                     unitsReported = true
                 }
+                "G90" -> distanceMode = DistanceMode.ABSOLUTE
+                "G91" -> distanceMode = DistanceMode.INCREMENTAL
             }
         }
 
+        val wcsChanged = activeWcs != previous.position.activeWcs
         val newPosition = previous.position.copy(
             activeWcs = activeWcs,
             units = units,
-            modalStateKnown =
-            previous.position.modalStateKnown || unitsReported
+            distanceMode = distanceMode,
+            modalStateKnown = previous.position.modalStateKnown || unitsReported,
+            // A modal report can reveal a WCS change before the next status
+            // report. Discard the old offset until the new WCO arrives.
+            wcoX = if (wcsChanged) null else previous.position.wcoX,
+            wcoY = if (wcsChanged) null else previous.position.wcoY,
+            wcoZ = if (wcsChanged) null else previous.position.wcoZ
         )
 
-        return previous.copy(
-            position = newPosition
-        )
+        return previous.copy(position = newPosition)
     }
 
-    private fun parseCoordinates(
-        value: String?
-    ): DoubleArray? {
-
+    private fun parseCoordinates(value: String?): DoubleArray? {
         if (value == null) return null
-
         val coordinates = value.split(",")
-
         if (coordinates.size != 3) return null
-
-        val parsed = coordinates.map {
-            it.trim().toDoubleOrNull()
-        }
-
-        if (parsed.any { it == null || !it.isFinite() }) {
-            return null
-        }
-
-        return doubleArrayOf(
-            parsed[0]!!,
-            parsed[1]!!,
-            parsed[2]!!
-        )
+        val parsed = coordinates.map { it.trim().toDoubleOrNull() }
+        if (parsed.any { it == null || !it.isFinite() }) return null
+        return doubleArrayOf(parsed[0]!!, parsed[1]!!, parsed[2]!!)
     }
 }
