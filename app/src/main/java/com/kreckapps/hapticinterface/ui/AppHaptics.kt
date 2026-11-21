@@ -14,7 +14,7 @@ private object AppHapticLimiter {
 
     @Synchronized
     fun allowMpgPulse(now: Long): Boolean {
-        if (now - lastMpgPulseAt < 50L) return false
+        if (now - lastMpgPulseAt < 25L) return false
         lastMpgPulseAt = now
         return true
     }
