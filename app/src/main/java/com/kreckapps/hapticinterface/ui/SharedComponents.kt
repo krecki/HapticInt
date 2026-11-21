@@ -195,32 +195,3 @@ fun PanelActionChip(
         }
     )
 }
-
-@Composable
-fun SpeedControl(
-    label: String,
-    speed: Float,
-    onSpeedChanged: (Float) -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = label,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Text("${speed.toInt()}%")
-        }
-
-        Slider(
-            value = speed,
-            onValueChange = onSpeedChanged,
-            valueRange = 1f..100f
-        )
-    }
-}
