@@ -217,12 +217,6 @@ class PendantCommandController(
     // Zero work-coordinate axes
     // ------------------------------------------------
 
-    fun zeroWorkX() = zeroWorkAxis('X')
-
-    fun zeroWorkY() = zeroWorkAxis('Y')
-
-    fun zeroWorkZ() = zeroWorkAxis('Z')
-
     fun zeroWorkAxis(axis: Char) {
         val normalizedAxis = axis.uppercaseChar()
 
@@ -326,12 +320,6 @@ class PendantCommandController(
         requestedCoordinateMode = coordinateMode
         beginControlHandover("Requesting pendant control for $normalizedAxis rapid move...")
     }
-
-    fun moveAxisToZero(
-        axis: Char,
-        coordinateMode: CoordinateDisplayMode,
-        displayUnits: MachineUnits
-    ) = moveAxisToPosition(axis, 0.0, coordinateMode, displayUnits)
 
     // ------------------------------------------------
     // Home machine
