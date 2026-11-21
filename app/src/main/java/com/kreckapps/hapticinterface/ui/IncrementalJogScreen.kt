@@ -22,9 +22,6 @@ import androidx.compose.runtime.withFrameNanos
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.kreckapps.hapticinterface.model.MachineUnits
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 
 private const val MAX_FEED_MM_MIN = 2500f
 private const val MM_PER_INCH = 25.4f
@@ -32,7 +29,6 @@ private const val MM_PER_INCH = 25.4f
 @Composable
 fun IncrementalJogScreen(
     axisSteps: Map<String, String>,
-    lastCommand: String,
     onStepChanged: (String, String) -> Unit,
     onCommand: (String) -> Unit,
     displayUnits: MachineUnits,
@@ -246,84 +242,6 @@ fun IncrementalJogScreen(
                     onJogCancel()
                     onCommand("Jog cancel requested")
                 }
-            )
-        }
-    }
-}
-
-@Composable
-fun AxisSettingsRow(
-    axis: String,
-    step: String,
-    unitLabel: String,
-    onStepChanged: (String) -> Unit
-) {
-    var fieldValue by remember {
-        mutableStateOf(TextFieldValue(step))
-    }
-
-    var hasFocus by remember {
-        mutableStateOf(false)
-    }
-
-    // Keep the text field synchronized with external changes
-    LaunchedEffect(step) {
-        if (step != fieldValue.text) {
-            fieldValue = TextFieldValue(step)
-        }
-    }
-
-    // Select all text after the focus event has completed
-    LaunchedEffect(hasFocus) {
-        if (hasFocus) {
-            withFrameNanos { }
-
-            fieldValue = fieldValue.copy(
-                selection = TextRange(
-                    0,
-                    fieldValue.text.length
-                )
-            )
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "$axis axis",
-                modifier = Modifier.width(65.dp),
-                fontWeight = FontWeight.Bold
-            )
-
-            OutlinedTextField(
-                value = fieldValue,
-                onValueChange = { newValue ->
-                    if (newValue.text.matches(
-                            Regex("[0-9]*\\.?[0-9]*")
-                        )
-                    ) {
-                        fieldValue = newValue
-                        onStepChanged(newValue.text)
-                    }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .onFocusChanged { state ->
-                        hasFocus = state.isFocused
-                    },
-                label = {
-                    Text("Step size ($unitLabel)")
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal
-                )
             )
         }
     }
